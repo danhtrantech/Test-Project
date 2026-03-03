@@ -1,58 +1,98 @@
-<h1>JWipe - Disk Sanitization</h1>
+# Notion Night Agent
 
- ### [YouTube Demonstration](https://youtu.be/7eJexJVCqJo)
+A Claude-powered daemon that automates your Notion workspace 24/7. It runs in the background and handles tedious organizational tasks while you sleep.
 
-<h2>Description</h2>
-Project consists of a simple PowerShell script that walks the user through "zeroing out" (wiping) any drives that are connected to the system. The utility allows you to select the target disk and choose the number of passes that are performed. The PowerShell script will configure a diskpart script file based on the user's selections and then launch Diskpart to perform the disk sanitization.
-<br />
+## What It Does
 
+| Task | Schedule | Description |
+|------|----------|-------------|
+| **Inbox Triage** | Every 15 min | Auto-categorizes and prioritizes uncategorized pages using Claude |
+| **Deadline Tracker** | Every 30 min | Flags overdue/urgent tasks and bumps their priority |
+| **Weekly Digest** | Weekly (Mon 9 AM) | Generates a summary page of your week's Notion activity |
+| **Stale Archiver** | Daily | Finds pages untouched for 30+ days, uses Claude to decide archive vs. keep |
 
-<h2>Languages and Utilities Used</h2>
+## Quick Start
 
-- <b>PowerShell</b> 
-- <b>Diskpart</b>
+### 1. Prerequisites
 
-<h2>Environments Used </h2>
+- Python 3.11+
+- A [Notion integration](https://www.notion.so/my-integrations) with access to your databases
+- An [Anthropic API key](https://console.anthropic.com/)
 
-- <b>Windows 10</b> (21H2)
+### 2. Notion Setup
 
-<h2>Program walk-through:</h2>
+1. Create a Notion integration at https://www.notion.so/my-integrations
+2. Share your target databases with the integration
+3. Your databases should have these properties:
+   - **Inbox DB**: `Name` (title), `Category` (select), `Priority` (select), `Status` (select)
+   - **Tasks DB**: `Name` (title), `Due Date` (date), `Status` (select), `Priority` (select)
 
-<p align="center">
-Launch the utility: <br/>
-<img src="https://i.imgur.com/62TgaWL.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Select the disk:  <br/>
-<img src="https://i.imgur.com/tcTyMUE.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Enter the number of passes: <br/>
-<img src="https://i.imgur.com/nCIbXbg.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Confirm your selection:  <br/>
-<img src="https://i.imgur.com/cdFHBiU.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Wait for process to complete (may take some time):  <br/>
-<img src="https://i.imgur.com/JL945Ga.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Sanitization complete:  <br/>
-<img src="https://i.imgur.com/K71yaM2.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Observe the wiped disk:  <br/>
-<img src="https://i.imgur.com/AeZkvFQ.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-</p>
+### 3. Install & Run
 
-<!--
- ```diff
-- text in red
-+ text in green
-! text in orange
-# text in gray
-@@ text in purple (and bold)@@
+```bash
+# Clone and enter the project
+git clone <repo-url> && cd notion-night-agent
+
+# Create a virtual environment
+python -m venv .venv && source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys and database IDs
+
+# Run the agent
+python main.py
 ```
---!>
+
+### 4. Run with Docker (optional)
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["python", "main.py"]
+```
+
+```bash
+docker build -t notion-night-agent .
+docker run -d --env-file .env --name notion-agent notion-night-agent
+```
+
+## Configuration
+
+All settings are configured via environment variables (see `.env.example`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | — | Your Anthropic API key (required) |
+| `NOTION_API_KEY` | — | Your Notion integration token (required) |
+| `NOTION_INBOX_DATABASE_ID` | — | Database ID for inbox triage |
+| `NOTION_TASKS_DATABASE_ID` | — | Database ID for deadline tracking |
+| `CLAUDE_MODEL` | `claude-sonnet-4-20250514` | Claude model to use |
+| `INBOX_TRIAGE_INTERVAL` | `15` | Minutes between inbox scans |
+| `DEADLINE_CHECK_INTERVAL` | `30` | Minutes between deadline checks |
+| `STALE_DAYS` | `30` | Days before a page is considered stale |
+| `LOG_LEVEL` | `INFO` | Logging verbosity |
+
+## Architecture
+
+```
+main.py              → Entry point + APScheduler daemon
+agent.py             → Claude AI wrapper (categorization, analysis, digest)
+notion_client.py     → Notion API client (queries, updates, page creation)
+config.py            → Environment-based configuration
+tasks/
+  inbox_triage.py    → Scan & categorize uncategorized pages
+  deadline_tracker.py→ Flag overdue tasks, reprioritize
+  weekly_digest.py   → Generate weekly summary page
+  stale_archiver.py  → AI-powered stale page cleanup
+```
+
+## License
+
+MIT
