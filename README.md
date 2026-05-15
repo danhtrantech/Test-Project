@@ -1,58 +1,86 @@
-<h1>JWipe - Disk Sanitization</h1>
+# qbai
 
- ### [YouTube Demonstration](https://youtu.be/7eJexJVCqJo)
+A standalone bookkeeping engine with a Claude-powered AI agent on top.
 
-<h2>Description</h2>
-Project consists of a simple PowerShell script that walks the user through "zeroing out" (wiping) any drives that are connected to the system. The utility allows you to select the target disk and choose the number of passes that are performed. The PowerShell script will configure a diskpart script file based on the user's selections and then launch Diskpart to perform the disk sanitization.
-<br />
+Goal: an AI agent that does the kind of work a QuickBooks user would do —
+ingest receipts/invoices/bank statements, keep the books in proper
+double-entry form, and produce the reports an accountant would expect for
+verification. **Not** an exact clone of QuickBooks Advanced — that's a
+multi-year proprietary platform. This is a focused, open implementation of
+the core accounting workflow.
 
+## Current status: foundation slice
 
-<h2>Languages and Utilities Used</h2>
+This first slice contains the load-bearing core that everything else will
+sit on top of.
 
-- <b>PowerShell</b> 
-- <b>Diskpart</b>
+| Module | Status |
+| --- | --- |
+| SQLite schema (accounts, journal entries, journal lines, audit log) | done |
+| Standard chart of accounts | done |
+| Double-entry ledger with `debits == credits` enforcement | done |
+| `proposed` → `approved` workflow (for AI-generated entries) | done |
+| Voiding via reversing entries | done |
+| Trial balance report | done |
+| Audit log | done |
+| Money as integer cents (no float drift) | done |
+| Customers / vendors | next slice |
+| A/R invoices + payments | next slice |
+| A/P bills + payments | next slice |
+| Document ingestion + Claude extraction | next slice |
+| Profit & Loss, Balance Sheet, General Ledger | next slice |
+| Conversational agent (Claude tool-use loop) | next slice |
+| Payroll / inventory | later slices |
 
-<h2>Environments Used </h2>
+## Try it
 
-- <b>Windows 10</b> (21H2)
+```bash
+# Initialize DB and seed the chart of accounts
+python -m qbai.cli init
 
-<h2>Program walk-through:</h2>
+# List accounts
+python -m qbai.cli accounts list
+python -m qbai.cli accounts list --type expense
 
-<p align="center">
-Launch the utility: <br/>
-<img src="https://i.imgur.com/62TgaWL.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Select the disk:  <br/>
-<img src="https://i.imgur.com/tcTyMUE.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Enter the number of passes: <br/>
-<img src="https://i.imgur.com/nCIbXbg.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Confirm your selection:  <br/>
-<img src="https://i.imgur.com/cdFHBiU.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Wait for process to complete (may take some time):  <br/>
-<img src="https://i.imgur.com/JL945Ga.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Sanitization complete:  <br/>
-<img src="https://i.imgur.com/K71yaM2.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Observe the wiped disk:  <br/>
-<img src="https://i.imgur.com/AeZkvFQ.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-</p>
+# Post a manual journal entry (cash sale of $250)
+python -m qbai.cli je post \
+  --date 2026-05-15 \
+  --memo "Cash sale of widgets" \
+  --line "1010:debit:250.00:Deposit" \
+  --line "4000:credit:250.00:Widget sale"
 
-<!--
- ```diff
-- text in red
-+ text in green
-! text in orange
-# text in gray
-@@ text in purple (and bold)@@
+# Inspect entries
+python -m qbai.cli je list
+python -m qbai.cli je show 1
+
+# Trial balance
+python -m qbai.cli trial-balance
+
+# Void an entry (creates a reversing entry; original is marked 'voided')
+python -m qbai.cli je void 1 --reason "duplicate"
 ```
---!>
+
+The DB lives at `data/qbai.db` by default; pass `--db /some/other.db`
+to override.
+
+## Run the tests
+
+```bash
+python -m unittest discover tests -v
+```
+
+## Design notes
+
+- **Money is integer cents everywhere** that touches the ledger. Floats
+  do not balance to the penny over long ledgers, so they live only in
+  display formatting.
+- **Every journal entry is balanced at post time** (sum of debits == sum
+  of credits), inside a single SQLite transaction.
+- **AI-generated entries are staged as `proposed`** and excluded from the
+  trial balance until a human approves them — this is the seam where the
+  agent will plug in.
+- **Voids are reversing entries, not deletes.** The original entry stays
+  in the ledger marked `voided` with a pointer to the reversal — that's
+  what an accountant expects to see during verification.
+- **Every state-changing action writes to `audit_log`** with actor, action,
+  entity, and timestamp.
