@@ -9,14 +9,11 @@ verification. **Not** an exact clone of QuickBooks Advanced — that's a
 multi-year proprietary platform. This is a focused, open implementation of
 the core accounting workflow.
 
-## Current status: foundation slice
-
-This first slice contains the load-bearing core that everything else will
-sit on top of.
+## Current status
 
 | Module | Status |
 | --- | --- |
-| SQLite schema (accounts, journal entries, journal lines, audit log) | done |
+| SQLite schema | done |
 | Standard chart of accounts | done |
 | Double-entry ledger with `debits == credits` enforcement | done |
 | `proposed` → `approved` workflow (for AI-generated entries) | done |
@@ -24,9 +21,12 @@ sit on top of.
 | Trial balance report | done |
 | Audit log | done |
 | Money as integer cents (no float drift) | done |
-| Customers / vendors | next slice |
-| A/R invoices + payments | next slice |
-| A/P bills + payments | next slice |
+| Customers and vendors (parties) | done |
+| A/R invoices (draft → open → paid/voided), auto-posts JE on finalize | done |
+| A/P bills (draft → open → paid/voided), auto-posts JE on finalize | done |
+| Customer receipts (`payment receive`) with multi-invoice allocation | done |
+| Vendor payments (`payment send`) with multi-bill allocation | done |
+| Standalone expenses (no bill, direct DR expense / CR cash) | done |
 | Document ingestion + Claude extraction | next slice |
 | Profit & Loss, Balance Sheet, General Ledger | next slice |
 | Conversational agent (Claude tool-use loop) | next slice |
@@ -38,26 +38,42 @@ sit on top of.
 # Initialize DB and seed the chart of accounts
 python -m qbai.cli init
 
-# List accounts
+# Accounts
 python -m qbai.cli accounts list
 python -m qbai.cli accounts list --type expense
 
-# Post a manual journal entry (cash sale of $250)
+# Manual journal entry
 python -m qbai.cli je post \
-  --date 2026-05-15 \
-  --memo "Cash sale of widgets" \
+  --date 2026-05-15 --memo "Cash sale of widgets" \
   --line "1010:debit:250.00:Deposit" \
   --line "4000:credit:250.00:Widget sale"
-
-# Inspect entries
-python -m qbai.cli je list
 python -m qbai.cli je show 1
-
-# Trial balance
-python -m qbai.cli trial-balance
-
-# Void an entry (creates a reversing entry; original is marked 'voided')
 python -m qbai.cli je void 1 --reason "duplicate"
+
+# Parties (customers and vendors)
+python -m qbai.cli parties add "Acme Corp"  --kind customer
+python -m qbai.cli parties add "Office Depot" --kind vendor
+
+# Customer invoice (A/R) — auto-posts JE on finalize
+python -m qbai.cli invoice create --party "Acme Corp" --date 2026-05-01 --memo "Consulting"
+python -m qbai.cli invoice add-line 1 --description "Consulting" --qty 20 --unit-price 150 --account 4100
+python -m qbai.cli invoice finalize 1
+python -m qbai.cli invoice show 1
+
+# Vendor bill (A/P) — auto-posts JE on finalize
+python -m qbai.cli bill create --party "Office Depot" --number "OD-9912"
+python -m qbai.cli bill add-line 1 --description "Paper" --qty 2 --unit-price 25 --account 6200
+python -m qbai.cli bill finalize 1
+
+# Payments
+python -m qbai.cli payment receive --party "Acme Corp" --amount 2000 --invoice 1:2000
+python -m qbai.cli payment send    --party "Office Depot" --amount 50  --bill 1:50
+
+# Standalone expense (paid directly, no bill)
+python -m qbai.cli expense add --account 6300 --amount 38.50 --vendor "Some Restaurant" --memo "Client lunch"
+
+# Reports
+python -m qbai.cli trial-balance
 ```
 
 The DB lives at `data/qbai.db` by default; pass `--db /some/other.db`

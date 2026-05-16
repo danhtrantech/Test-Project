@@ -67,6 +67,107 @@ CREATE TABLE IF NOT EXISTS audit_log (
     entity_id    INTEGER,
     details      TEXT
 );
+
+CREATE TABLE IF NOT EXISTS parties (
+    id          INTEGER PRIMARY KEY,
+    kind        TEXT NOT NULL CHECK(kind IN ('customer','vendor','both')),
+    name        TEXT NOT NULL,
+    email       TEXT,
+    phone       TEXT,
+    address     TEXT,
+    notes       TEXT,
+    is_active   INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(name, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_parties_kind ON parties(kind);
+
+CREATE TABLE IF NOT EXISTS invoices (
+    id                  INTEGER PRIMARY KEY,
+    party_id            INTEGER NOT NULL REFERENCES parties(id),
+    number              TEXT,
+    invoice_date        TEXT NOT NULL,
+    due_date            TEXT,
+    memo                TEXT,
+    status              TEXT NOT NULL DEFAULT 'draft'
+                          CHECK(status IN ('draft','open','paid','voided')),
+    subtotal_cents      INTEGER NOT NULL DEFAULT 0,
+    tax_cents           INTEGER NOT NULL DEFAULT 0,
+    total_cents         INTEGER NOT NULL DEFAULT 0,
+    amount_paid_cents   INTEGER NOT NULL DEFAULT 0,
+    ar_account_id       INTEGER REFERENCES accounts(id),
+    tax_account_id      INTEGER REFERENCES accounts(id),
+    posted_je_id        INTEGER REFERENCES journal_entries(id),
+    voided_je_id        INTEGER REFERENCES journal_entries(id),
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_party  ON invoices(party_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+
+CREATE TABLE IF NOT EXISTS invoice_lines (
+    id                INTEGER PRIMARY KEY,
+    invoice_id        INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    description       TEXT,
+    quantity          REAL NOT NULL DEFAULT 1,
+    unit_price_cents  INTEGER NOT NULL,
+    amount_cents      INTEGER NOT NULL,
+    income_account_id INTEGER NOT NULL REFERENCES accounts(id)
+);
+
+CREATE TABLE IF NOT EXISTS bills (
+    id                  INTEGER PRIMARY KEY,
+    party_id            INTEGER NOT NULL REFERENCES parties(id),
+    number              TEXT,
+    bill_date           TEXT NOT NULL,
+    due_date            TEXT,
+    memo                TEXT,
+    status              TEXT NOT NULL DEFAULT 'draft'
+                          CHECK(status IN ('draft','open','paid','voided')),
+    subtotal_cents      INTEGER NOT NULL DEFAULT 0,
+    tax_cents           INTEGER NOT NULL DEFAULT 0,
+    total_cents         INTEGER NOT NULL DEFAULT 0,
+    amount_paid_cents   INTEGER NOT NULL DEFAULT 0,
+    ap_account_id       INTEGER REFERENCES accounts(id),
+    tax_account_id      INTEGER REFERENCES accounts(id),
+    posted_je_id        INTEGER REFERENCES journal_entries(id),
+    voided_je_id        INTEGER REFERENCES journal_entries(id),
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_bills_party  ON bills(party_id);
+CREATE INDEX IF NOT EXISTS idx_bills_status ON bills(status);
+
+CREATE TABLE IF NOT EXISTS bill_lines (
+    id                 INTEGER PRIMARY KEY,
+    bill_id            INTEGER NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+    description        TEXT,
+    quantity           REAL NOT NULL DEFAULT 1,
+    unit_price_cents   INTEGER NOT NULL,
+    amount_cents       INTEGER NOT NULL,
+    expense_account_id INTEGER NOT NULL REFERENCES accounts(id)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+    id               INTEGER PRIMARY KEY,
+    kind             TEXT NOT NULL CHECK(kind IN ('receive','send')),
+    party_id         INTEGER NOT NULL REFERENCES parties(id),
+    payment_date     TEXT NOT NULL,
+    amount_cents     INTEGER NOT NULL,
+    cash_account_id  INTEGER NOT NULL REFERENCES accounts(id),
+    memo             TEXT,
+    reference        TEXT,
+    posted_je_id     INTEGER REFERENCES journal_entries(id),
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_payments_party ON payments(party_id);
+
+CREATE TABLE IF NOT EXISTS payment_allocations (
+    id            INTEGER PRIMARY KEY,
+    payment_id    INTEGER NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    invoice_id    INTEGER REFERENCES invoices(id),
+    bill_id       INTEGER REFERENCES bills(id),
+    amount_cents  INTEGER NOT NULL,
+    CHECK((invoice_id IS NULL) <> (bill_id IS NULL))
+);
 """
 
 
