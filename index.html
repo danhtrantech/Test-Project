@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0b0f17" />
+<title>Taximeter</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #121826;
+    --panel-2: #1a2233;
+    --accent: #ffd60a;
+    --accent-2: #ffea61;
+    --danger: #ff4d6d;
+    --ok: #2ecc71;
+    --muted: #7a8699;
+    --text: #f3f6fb;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overscroll-behavior: none;
+  }
+  body {
+    display: flex; flex-direction: column;
+    max-width: 520px; margin: 0 auto;
+    min-height: 100vh; padding: 16px;
+    gap: 14px;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  h1 {
+    margin: 0; font-size: 20px; letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  h1 .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--muted); box-shadow: 0 0 0 0 rgba(46,204,113,0);
+    transition: background .2s;
+  }
+  h1 .dot.live { background: var(--ok); animation: pulse 1.2s infinite; }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(46,204,113,0.6); }
+    70%  { box-shadow: 0 0 0 10px rgba(46,204,113,0); }
+    100% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
+  }
+  .settings-btn {
+    background: var(--panel); color: var(--text); border: none;
+    padding: 8px 12px; border-radius: 10px; font-size: 14px; cursor: pointer;
+  }
+  .fare {
+    background: linear-gradient(160deg, #1a2233 0%, #0f1422 100%);
+    border-radius: 18px; padding: 28px 20px; text-align: center;
+    border: 1px solid #1f2940;
+  }
+  .fare .label { color: var(--muted); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
+  .fare .amount {
+    font-size: 64px; font-weight: 700; line-height: 1; margin-top: 8px;
+    color: var(--accent); font-variant-numeric: tabular-nums;
+  }
+  .fare .currency { font-size: 28px; color: var(--accent-2); margin-right: 4px; }
+  .stats {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+  }
+  .stat {
+    background: var(--panel); border-radius: 12px; padding: 12px;
+    text-align: center; border: 1px solid #1c2438;
+  }
+  .stat .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .stat .v { font-size: 20px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .controls {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  button.primary, button.secondary, button.danger {
+    border: none; border-radius: 14px; padding: 16px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    transition: transform .05s, opacity .15s;
+  }
+  button.primary { background: var(--ok); color: #062b14; grid-column: span 2; }
+  button.primary.pause { background: var(--accent); color: #2b1f00; }
+  button.secondary { background: var(--panel-2); color: var(--text); }
+  button.danger { background: var(--danger); color: #2b0612; }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .breakdown {
+    background: var(--panel); border-radius: 12px; padding: 14px 16px;
+    font-size: 14px; border: 1px solid #1c2438;
+  }
+  .breakdown .row {
+    display: flex; justify-content: space-between; padding: 4px 0;
+    color: var(--muted);
+  }
+  .breakdown .row span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
+  .breakdown .total {
+    border-top: 1px solid #2a3550; margin-top: 8px; padding-top: 8px;
+    color: var(--text); font-weight: 600;
+  }
+
+  /* Settings modal */
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: flex-end; justify-content: center;
+    z-index: 100;
+  }
+  .modal.open { display: flex; }
+  .sheet {
+    background: var(--panel); width: 100%; max-width: 520px;
+    border-radius: 18px 18px 0 0; padding: 20px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .sheet h2 { margin: 0 0 14px; font-size: 18px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .field input, .field select {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid #2a3550; border-radius: 10px;
+    padding: 12px; font-size: 16px; outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .presets button {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid #2a3550; border-radius: 999px;
+    padding: 8px 14px; font-size: 13px; cursor: pointer;
+  }
+  .presets button.active { background: var(--accent); color: #2b1f00; border-color: var(--accent); }
+  .status {
+    text-align: center; color: var(--muted); font-size: 12px; min-height: 16px;
+  }
+  .status.err { color: var(--danger); }
+  footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: auto; padding-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot" id="liveDot"></span>Taximeter</h1>
+  <button class="settings-btn" id="openSettings">Rates</button>
+</header>
+
+<div class="fare">
+  <div class="label">Total Fare</div>
+  <div class="amount"><span class="currency" id="curSym">$</span><span id="fareAmount">0.00</span></div>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="k">Distance</div>
+    <div class="v"><span id="distVal">0.00</span> <span id="distUnit">km</span></div>
+  </div>
+  <div class="stat">
+    <div class="k">Time</div>
+    <div class="v" id="timeVal">00:00</div>
+  </div>
+  <div class="stat">
+    <div class="k">Speed</div>
+    <div class="v"><span id="speedVal">0</span> <span id="speedUnit">km/h</span></div>
+  </div>
+</div>
+
+<div class="breakdown" id="breakdown">
+  <div class="row"><span>Base fare</span><span id="bdBase">$0.00</span></div>
+  <div class="row"><span>Distance</span><span id="bdDist">$0.00</span></div>
+  <div class="row"><span>Time</span><span id="bdTime">$0.00</span></div>
+  <div class="row total"><span>Subtotal × <span id="bdMult">1.0</span>×</span><span id="bdTotal">$0.00</span></div>
+</div>
+
+<div class="status" id="status">Press Start to begin trip</div>
+
+<div class="controls">
+  <button class="primary" id="startBtn">Start Trip</button>
+  <button class="secondary" id="pauseBtn" disabled>Pause</button>
+  <button class="danger" id="resetBtn">Reset</button>
+</div>
+
+<footer>GPS-based · Tap Rates to configure pricing</footer>
+
+<div class="modal" id="settingsModal">
+  <div class="sheet">
+    <h2>Fare Settings</h2>
+
+    <div class="presets" id="presets">
+      <button data-preset="nyc">NYC Taxi</button>
+      <button data-preset="uberx">UberX (avg)</button>
+      <button data-preset="london">London Cab</button>
+      <button data-preset="custom" class="active">Custom</button>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Currency</label>
+        <select id="currency">
+          <option value="$">USD $</option>
+          <option value="€">EUR €</option>
+          <option value="£">GBP £</option>
+          <option value="¥">JPY ¥</option>
+          <option value="₹">INR ₹</option>
+          <option value="A$">AUD A$</option>
+          <option value="C$">CAD C$</option>
+          <option value="R$">BRL R$</option>
+          <option value="₱">PHP ₱</option>
+          <option value="₫">VND ₫</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Units</label>
+        <select id="units">
+          <option value="km">Kilometers</option>
+          <option value="mi">Miles</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Base Fare (flagdown)</label>
+      <input type="number" id="baseFare" step="0.01" min="0" inputmode="decimal" />
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Per <span class="unitLbl">km</span></label>
+        <input type="number" id="perDist" step="0.01" min="0" inputmode="decimal" />
+      </div>
+      <div class="field">
+        <label>Per minute</label>
+        <input type="number" id="perMin" step="0.01" min="0" inputmode="decimal" />
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Surge multiplier</label>
+        <input type="number" id="multiplier" step="0.1" min="1" value="1.0" inputmode="decimal" />
+      </div>
+      <div class="field">
+        <label>Minimum fare</label>
+        <input type="number" id="minFare" step="0.01" min="0" inputmode="decimal" />
+      </div>
+    </div>
+
+    <div class="controls" style="margin-top: 8px;">
+      <button class="secondary" id="cancelSettings">Cancel</button>
+      <button class="primary" id="saveSettings" style="background: var(--accent); color: #2b1f00;">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const PRESETS = {
+    nyc:    { currency: '$',  units: 'mi', baseFare: 3.00, perDist: 3.50, perMin: 0.70, minFare: 3.00 },
+    uberx:  { currency: '$',  units: 'mi', baseFare: 2.55, perDist: 1.75, perMin: 0.35, minFare: 7.00 },
+    london: { currency: '£',  units: 'mi', baseFare: 3.80, perDist: 3.50, perMin: 0.50, minFare: 3.80 },
+    custom: { currency: '$',  units: 'km', baseFare: 2.50, perDist: 1.20, perMin: 0.25, minFare: 4.00 },
+  };
+
+  const DEFAULTS_KEY = 'taximeter.settings.v1';
+  const loadSettings = () => {
+    try {
+      const raw = localStorage.getItem(DEFAULTS_KEY);
+      if (raw) return { ...PRESETS.custom, multiplier: 1.0, ...JSON.parse(raw) };
+    } catch (e) {}
+    return { ...PRESETS.custom, multiplier: 1.0 };
+  };
+  const saveSettings = (s) => localStorage.setItem(DEFAULTS_KEY, JSON.stringify(s));
+
+  let settings = loadSettings();
+
+  // State
+  let state = 'idle'; // idle | running | paused
+  let distanceMeters = 0;
+  let timeSeconds = 0;     // total trip time
+  let waitSeconds = 0;     // time below moving threshold
+  let lastTickAt = null;
+  let lastPos = null;
+  let lastSpeed = 0;
+  let watchId = null;
+  let tickHandle = null;
+
+  // DOM
+  const $ = (id) => document.getElementById(id);
+  const liveDot = $('liveDot');
+  const fareAmount = $('fareAmount');
+  const curSym = $('curSym');
+  const distVal = $('distVal');
+  const distUnit = $('distUnit');
+  const timeVal = $('timeVal');
+  const speedVal = $('speedVal');
+  const speedUnit = $('speedUnit');
+  const startBtn = $('startBtn');
+  const pauseBtn = $('pauseBtn');
+  const resetBtn = $('resetBtn');
+  const statusEl = $('status');
+  const bdBase = $('bdBase');
+  const bdDist = $('bdDist');
+  const bdTime = $('bdTime');
+  const bdTotal = $('bdTotal');
+  const bdMult = $('bdMult');
+
+  // Settings DOM
+  const settingsModal = $('settingsModal');
+  const openSettings = $('openSettings');
+  const cancelSettings = $('cancelSettings');
+  const saveSettingsBtn = $('saveSettings');
+  const currencyEl = $('currency');
+  const unitsEl = $('units');
+  const baseFareEl = $('baseFare');
+  const perDistEl = $('perDist');
+  const perMinEl = $('perMin');
+  const multiplierEl = $('multiplier');
+  const minFareEl = $('minFare');
+
+  const fmt = (n) => (Math.round(n * 100) / 100).toFixed(2);
+  const fmtTime = (s) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    const pad = (x) => String(x).padStart(2, '0');
+    return h > 0 ? `${pad(h)}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+  };
+
+  // Haversine in meters
+  const distMeters = (a, b) => {
+    const R = 6371000;
+    const toRad = (d) => d * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLon = toRad(b.lng - a.lng);
+    const la1 = toRad(a.lat);
+    const la2 = toRad(b.lat);
+    const h = Math.sin(dLat/2)**2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+
+  const distanceInUnit = () => settings.units === 'mi' ? distanceMeters / 1609.344 : distanceMeters / 1000;
+  const speedInUnit = (mps) => settings.units === 'mi' ? mps * 2.23694 : mps * 3.6;
+
+  const computeFare = () => {
+    const base = +settings.baseFare || 0;
+    const perDist = +settings.perDist || 0;
+    const perMin = +settings.perMin || 0;
+    const mult = +settings.multiplier || 1.0;
+    const minFare = +settings.minFare || 0;
+
+    const dCost = distanceInUnit() * perDist;
+    const tCost = (timeSeconds / 60) * perMin;
+    let subtotal = base + dCost + tCost;
+    let total = subtotal * mult;
+    if (total < minFare) total = minFare;
+    return { base, dCost, tCost, subtotal, total, mult };
+  };
+
+  const render = () => {
+    curSym.textContent = settings.currency;
+    distUnit.textContent = settings.units;
+    speedUnit.textContent = settings.units === 'mi' ? 'mph' : 'km/h';
+    document.querySelectorAll('.unitLbl').forEach(el => el.textContent = settings.units);
+
+    distVal.textContent = fmt(distanceInUnit());
+    timeVal.textContent = fmtTime(timeSeconds);
+    speedVal.textContent = Math.round(speedInUnit(lastSpeed));
+
+    const f = computeFare();
+    fareAmount.textContent = fmt(f.total);
+    bdBase.textContent = settings.currency + fmt(f.base);
+    bdDist.textContent = settings.currency + fmt(f.dCost);
+    bdTime.textContent = settings.currency + fmt(f.tCost);
+    bdTotal.textContent = settings.currency + fmt(f.total);
+    bdMult.textContent = (+settings.multiplier || 1).toFixed(1);
+
+    liveDot.classList.toggle('live', state === 'running');
+    startBtn.textContent = state === 'running' ? 'Stop Trip' : (state === 'paused' ? 'Resume' : 'Start Trip');
+    startBtn.classList.toggle('pause', state === 'paused');
+    pauseBtn.disabled = state === 'idle';
+    pauseBtn.textContent = state === 'paused' ? 'Resume' : 'Pause';
+  };
+
+  const tick = () => {
+    if (state !== 'running') return;
+    const now = Date.now();
+    if (lastTickAt) {
+      const dt = (now - lastTickAt) / 1000;
+      timeSeconds += dt;
+    }
+    lastTickAt = now;
+    render();
+  };
+
+  const onPosition = (pos) => {
+    if (state !== 'running') return;
+    const cur = { lat: pos.coords.latitude, lng: pos.coords.longitude, t: pos.timestamp };
+    const acc = pos.coords.accuracy || 0;
+
+    if (lastPos) {
+      const d = distMeters(lastPos, cur);
+      // Filter noise: skip large jumps for low-accuracy fixes, and tiny stationary jitter
+      if (acc < 50 && d >= 2 && d < 200) {
+        distanceMeters += d;
+      }
+    }
+    lastSpeed = pos.coords.speed != null && pos.coords.speed >= 0 ? pos.coords.speed : lastSpeed;
+    lastPos = cur;
+
+    if (acc > 50) statusEl.textContent = `Acquiring better GPS signal (±${Math.round(acc)} m)…`;
+    else statusEl.textContent = `GPS locked · ±${Math.round(acc)} m`;
+    statusEl.classList.remove('err');
+    render();
+  };
+
+  const onPositionError = (err) => {
+    statusEl.classList.add('err');
+    if (err.code === 1) statusEl.textContent = 'Location permission denied — enable GPS to track distance';
+    else if (err.code === 2) statusEl.textContent = 'GPS unavailable';
+    else if (err.code === 3) statusEl.textContent = 'GPS timeout — retrying…';
+    else statusEl.textContent = 'GPS error';
+  };
+
+  const startGPS = () => {
+    if (!('geolocation' in navigator)) {
+      statusEl.classList.add('err');
+      statusEl.textContent = 'Geolocation not supported in this browser';
+      return false;
+    }
+    watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
+      enableHighAccuracy: true,
+      maximumAge: 1000,
+      timeout: 15000,
+    });
+    return true;
+  };
+
+  const stopGPS = () => {
+    if (watchId != null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+  };
+
+  const start = () => {
+    if (state === 'running') {
+      // Stop the trip
+      state = 'idle';
+      stopGPS();
+      clearInterval(tickHandle);
+      tickHandle = null;
+      lastTickAt = null;
+      statusEl.textContent = 'Trip ended. Press Reset to clear or Start for a new trip.';
+      statusEl.classList.remove('err');
+      render();
+      return;
+    }
+    if (state === 'paused') {
+      state = 'running';
+      lastTickAt = Date.now();
+      lastPos = null;
+      startGPS();
+      tickHandle = setInterval(tick, 250);
+      statusEl.textContent = 'Resumed';
+      render();
+      return;
+    }
+    // idle -> running
+    state = 'running';
+    lastTickAt = Date.now();
+    lastPos = null;
+    if (!startGPS()) {
+      state = 'idle';
+      return;
+    }
+    statusEl.textContent = 'Waiting for GPS fix…';
+    statusEl.classList.remove('err');
+    tickHandle = setInterval(tick, 250);
+    render();
+  };
+
+  const pause = () => {
+    if (state === 'idle') return;
+    if (state === 'running') {
+      state = 'paused';
+      stopGPS();
+      clearInterval(tickHandle);
+      tickHandle = null;
+      lastTickAt = null;
+      lastSpeed = 0;
+      statusEl.textContent = 'Paused — fare frozen';
+      render();
+    } else if (state === 'paused') {
+      start(); // resume
+    }
+  };
+
+  const reset = () => {
+    if (state !== 'idle' && !confirm('End and reset the current trip?')) return;
+    state = 'idle';
+    stopGPS();
+    clearInterval(tickHandle);
+    tickHandle = null;
+    distanceMeters = 0;
+    timeSeconds = 0;
+    waitSeconds = 0;
+    lastPos = null;
+    lastTickAt = null;
+    lastSpeed = 0;
+    statusEl.textContent = 'Press Start to begin trip';
+    statusEl.classList.remove('err');
+    render();
+  };
+
+  // Settings modal
+  const populateSettingsForm = () => {
+    currencyEl.value = settings.currency;
+    unitsEl.value = settings.units;
+    baseFareEl.value = settings.baseFare;
+    perDistEl.value = settings.perDist;
+    perMinEl.value = settings.perMin;
+    multiplierEl.value = settings.multiplier ?? 1.0;
+    minFareEl.value = settings.minFare;
+  };
+
+  const openModal = () => { populateSettingsForm(); settingsModal.classList.add('open'); };
+  const closeModal = () => settingsModal.classList.remove('open');
+
+  document.querySelectorAll('#presets button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#presets button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const p = PRESETS[btn.dataset.preset];
+      if (!p) return;
+      currencyEl.value = p.currency;
+      unitsEl.value = p.units;
+      baseFareEl.value = p.baseFare;
+      perDistEl.value = p.perDist;
+      perMinEl.value = p.perMin;
+      minFareEl.value = p.minFare;
+    });
+  });
+
+  openSettings.addEventListener('click', openModal);
+  cancelSettings.addEventListener('click', closeModal);
+  saveSettingsBtn.addEventListener('click', () => {
+    settings = {
+      currency: currencyEl.value,
+      units: unitsEl.value,
+      baseFare: parseFloat(baseFareEl.value) || 0,
+      perDist: parseFloat(perDistEl.value) || 0,
+      perMin: parseFloat(perMinEl.value) || 0,
+      multiplier: parseFloat(multiplierEl.value) || 1.0,
+      minFare: parseFloat(minFareEl.value) || 0,
+    };
+    saveSettings(settings);
+    closeModal();
+    render();
+  });
+
+  settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeModal(); });
+
+  startBtn.addEventListener('click', start);
+  pauseBtn.addEventListener('click', pause);
+  resetBtn.addEventListener('click', reset);
+
+  // Keep screen alive when running (best-effort)
+  let wakeLock = null;
+  document.addEventListener('visibilitychange', async () => {
+    if (state === 'running' && document.visibilityState === 'visible' && 'wakeLock' in navigator) {
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
