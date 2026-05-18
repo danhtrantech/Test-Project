@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="theme-color" content="#0b0f17" />
-<title>Taximeter</title>
+<title>Fare Beat — Upfront Ride Estimate</title>
 <style>
   :root {
     --bg: #0b0f17;
@@ -12,565 +12,572 @@
     --panel-2: #1a2233;
     --accent: #ffd60a;
     --accent-2: #ffea61;
+    --uber: #000000;
+    --uber-fg: #ffffff;
+    --lyft: #ff00bf;
+    --you: #2ecc71;
     --danger: #ff4d6d;
-    --ok: #2ecc71;
     --muted: #7a8699;
     --text: #f3f6fb;
+    --border: #1f2940;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body {
-    margin: 0; padding: 0; height: 100%;
-    background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    overscroll-behavior: none;
-  }
-  body {
-    display: flex; flex-direction: column;
-    max-width: 520px; margin: 0 auto;
-    min-height: 100vh; padding: 16px;
-    gap: 14px;
-  }
-  header {
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  h1 {
-    margin: 0; font-size: 20px; letter-spacing: 0.5px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  h1 .dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--muted); box-shadow: 0 0 0 0 rgba(46,204,113,0);
-    transition: background .2s;
-  }
-  h1 .dot.live { background: var(--ok); animation: pulse 1.2s infinite; }
-  @keyframes pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(46,204,113,0.6); }
-    70%  { box-shadow: 0 0 0 10px rgba(46,204,113,0); }
-    100% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
-  }
-  .settings-btn {
-    background: var(--panel); color: var(--text); border: none;
-    padding: 8px 12px; border-radius: 10px; font-size: 14px; cursor: pointer;
-  }
-  .fare {
-    background: linear-gradient(160deg, #1a2233 0%, #0f1422 100%);
-    border-radius: 18px; padding: 28px 20px; text-align: center;
-    border: 1px solid #1f2940;
-  }
-  .fare .label { color: var(--muted); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
-  .fare .amount {
-    font-size: 64px; font-weight: 700; line-height: 1; margin-top: 8px;
-    color: var(--accent); font-variant-numeric: tabular-nums;
-  }
-  .fare .currency { font-size: 28px; color: var(--accent-2); margin-right: 4px; }
-  .stats {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
-  }
-  .stat {
-    background: var(--panel); border-radius: 12px; padding: 12px;
-    text-align: center; border: 1px solid #1c2438;
-  }
-  .stat .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-  .stat .v { font-size: 20px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .controls {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  }
-  button.primary, button.secondary, button.danger {
-    border: none; border-radius: 14px; padding: 16px;
-    font-size: 16px; font-weight: 600; cursor: pointer;
-    transition: transform .05s, opacity .15s;
-  }
-  button.primary { background: var(--ok); color: #062b14; grid-column: span 2; }
-  button.primary.pause { background: var(--accent); color: #2b1f00; }
-  button.secondary { background: var(--panel-2); color: var(--text); }
-  button.danger { background: var(--danger); color: #2b0612; }
-  button:active { transform: scale(0.98); }
-  button:disabled { opacity: 0.45; cursor: not-allowed; }
-  .breakdown {
-    background: var(--panel); border-radius: 12px; padding: 14px 16px;
-    font-size: 14px; border: 1px solid #1c2438;
-  }
-  .breakdown .row {
-    display: flex; justify-content: space-between; padding: 4px 0;
-    color: var(--muted);
-  }
-  .breakdown .row span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
-  .breakdown .total {
-    border-top: 1px solid #2a3550; margin-top: 8px; padding-top: 8px;
-    color: var(--text); font-weight: 600;
-  }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  body { max-width: 560px; margin: 0 auto; padding: 16px; min-height: 100vh;
+    display: flex; flex-direction: column; gap: 14px; }
+  header { display: flex; align-items: center; justify-content: space-between; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
+  h1 .logo { color: var(--accent); }
+  .icon-btn { background: var(--panel); color: var(--text); border: none;
+    padding: 8px 12px; border-radius: 10px; font-size: 14px; cursor: pointer; }
 
-  /* Settings modal */
-  .modal {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-    display: none; align-items: flex-end; justify-content: center;
-    z-index: 100;
-  }
-  .modal.open { display: flex; }
-  .sheet {
-    background: var(--panel); width: 100%; max-width: 520px;
-    border-radius: 18px 18px 0 0; padding: 20px;
-    max-height: 90vh; overflow-y: auto;
-  }
-  .sheet h2 { margin: 0 0 14px; font-size: 18px; }
-  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-  .field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .card { background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; position: relative; }
+  .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
   .field input, .field select {
     background: var(--panel-2); color: var(--text);
     border: 1px solid #2a3550; border-radius: 10px;
-    padding: 12px; font-size: 16px; outline: none;
+    padding: 12px; font-size: 16px; outline: none; width: 100%;
   }
   .field input:focus, .field select:focus { border-color: var(--accent); }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-  .presets button {
-    background: var(--panel-2); color: var(--text);
-    border: 1px solid #2a3550; border-radius: 999px;
-    padding: 8px 14px; font-size: 13px; cursor: pointer;
+  .field .input-row { display: flex; gap: 6px; }
+  .field .input-row input { flex: 1; }
+  .field .input-row button {
+    background: var(--panel-2); color: var(--text); border: 1px solid #2a3550;
+    border-radius: 10px; padding: 0 12px; cursor: pointer; font-size: 18px;
   }
-  .presets button.active { background: var(--accent); color: #2b1f00; border-color: var(--accent); }
-  .status {
-    text-align: center; color: var(--muted); font-size: 12px; min-height: 16px;
+  .suggestions {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+    background: var(--panel-2); border: 1px solid #2a3550;
+    border-radius: 10px; margin-top: 4px; max-height: 260px; overflow-y: auto;
+    display: none;
   }
+  .suggestions.open { display: block; }
+  .suggestions div { padding: 10px 12px; cursor: pointer; font-size: 14px;
+    border-bottom: 1px solid #2a3550; }
+  .suggestions div:last-child { border-bottom: none; }
+  .suggestions div:hover { background: #233055; }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button.primary, button.secondary {
+    border: none; border-radius: 12px; padding: 14px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #2b1f00; grid-column: span 2; }
+  button.secondary { background: var(--panel-2); color: var(--text); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:active { transform: scale(0.98); }
+
+  .route-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .route-summary .stat { background: var(--panel-2); border-radius: 10px;
+    padding: 10px; text-align: center; border: 1px solid #2a3550; }
+  .route-summary .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .route-summary .v { font-size: 18px; font-weight: 600; margin-top: 4px; }
+
+  .quotes { display: flex; flex-direction: column; gap: 10px; }
+  .quote {
+    border-radius: 14px; padding: 14px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    border: 1px solid var(--border);
+  }
+  .quote.you { background: linear-gradient(140deg, #103b21 0%, #0b1f12 100%); border-color: #1f6b3c; }
+  .quote.uber { background: linear-gradient(140deg, #1a1a1a 0%, #0a0a0a 100%); border-color: #2a2a2a; }
+  .quote.lyft { background: linear-gradient(140deg, #2a0a23 0%, #150512 100%); border-color: #6b1f5a; }
+  .quote .name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 10px; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 1px; }
+  .badge.win { background: var(--you); color: #062b14; }
+  .badge.lose { background: var(--danger); color: #2b0612; }
+  .quote .right { text-align: right; }
+  .quote .price { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .quote .delta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .status { text-align: center; color: var(--muted); font-size: 12px; min-height: 16px; }
   .status.err { color: var(--danger); }
+
+  /* Settings modal */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+    display: none; align-items: flex-end; justify-content: center; z-index: 100; }
+  .modal.open { display: flex; }
+  .sheet { background: var(--panel); width: 100%; max-width: 560px;
+    border-radius: 18px 18px 0 0; padding: 20px;
+    max-height: 92vh; overflow-y: auto; }
+  .sheet h2 { margin: 0 0 14px; font-size: 18px; }
+  .sheet h3 { margin: 14px 0 8px; font-size: 13px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .sheet .field { margin-bottom: 10px; }
+  .surge-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .surge-row input[type=range] { flex: 1; }
+  .surge-val { width: 50px; text-align: right; font-variant-numeric: tabular-nums; }
   footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: auto; padding-top: 8px; }
+  .spinner { display: inline-block; width: 12px; height: 12px;
+    border: 2px solid #fff3; border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 
 <header>
-  <h1><span class="dot" id="liveDot"></span>Taximeter</h1>
-  <button class="settings-btn" id="openSettings">Rates</button>
+  <h1><span class="logo">●</span> Fare Beat</h1>
+  <button class="icon-btn" id="openSettings">Rates</button>
 </header>
 
-<div class="fare">
-  <div class="label">Total Fare</div>
-  <div class="amount"><span class="currency" id="curSym">$</span><span id="fareAmount">0.00</span></div>
-</div>
-
-<div class="stats">
-  <div class="stat">
-    <div class="k">Distance</div>
-    <div class="v"><span id="distVal">0.00</span> <span id="distUnit">km</span></div>
+<div class="card">
+  <div class="field" style="margin-bottom: 10px;">
+    <label>Pickup</label>
+    <div class="input-row">
+      <input id="pickup" type="text" placeholder="Address, place or business" autocomplete="off" />
+      <button id="useMyLoc" title="Use current location">📍</button>
+    </div>
+    <div class="suggestions" id="pickupSug"></div>
   </div>
-  <div class="stat">
-    <div class="k">Time</div>
-    <div class="v" id="timeVal">00:00</div>
-  </div>
-  <div class="stat">
-    <div class="k">Speed</div>
-    <div class="v"><span id="speedVal">0</span> <span id="speedUnit">km/h</span></div>
+  <div class="field">
+    <label>Destination</label>
+    <input id="dest" type="text" placeholder="Where to?" autocomplete="off" />
+    <div class="suggestions" id="destSug"></div>
   </div>
 </div>
 
-<div class="breakdown" id="breakdown">
-  <div class="row"><span>Base fare</span><span id="bdBase">$0.00</span></div>
-  <div class="row"><span>Distance</span><span id="bdDist">$0.00</span></div>
-  <div class="row"><span>Time</span><span id="bdTime">$0.00</span></div>
-  <div class="row total"><span>Subtotal × <span id="bdMult">1.0</span>×</span><span id="bdTotal">$0.00</span></div>
+<div class="actions">
+  <button class="primary" id="estimateBtn">Get Estimate</button>
 </div>
 
-<div class="status" id="status">Press Start to begin trip</div>
+<div class="status" id="status">Enter both addresses to get an estimate</div>
 
-<div class="controls">
-  <button class="primary" id="startBtn">Start Trip</button>
-  <button class="secondary" id="pauseBtn" disabled>Pause</button>
-  <button class="danger" id="resetBtn">Reset</button>
+<div class="card" id="routeCard" style="display:none;">
+  <div class="route-summary">
+    <div class="stat"><div class="k">Distance</div><div class="v"><span id="routeDist">—</span></div></div>
+    <div class="stat"><div class="k">Drive time</div><div class="v"><span id="routeTime">—</span></div></div>
+  </div>
 </div>
 
-<footer>GPS-based · Tap Rates to configure pricing</footer>
+<div class="quotes" id="quotes" style="display:none;">
+  <div class="quote you">
+    <div class="name">Your Price <span class="badge win" id="youBadge">YOU</span></div>
+    <div class="right">
+      <div class="price"><span id="curYou">$</span><span id="priceYou">0.00</span></div>
+      <div class="delta" id="deltaYou">—</div>
+    </div>
+  </div>
+  <div class="quote uber">
+    <div class="name">UberX (est.)</div>
+    <div class="right">
+      <div class="price"><span id="curUber">$</span><span id="priceUber">0.00</span></div>
+      <div class="delta" id="deltaUber">—</div>
+    </div>
+  </div>
+  <div class="quote lyft">
+    <div class="name">Lyft (est.)</div>
+    <div class="right">
+      <div class="price"><span id="curLyft">$</span><span id="priceLyft">0.00</span></div>
+      <div class="delta" id="deltaLyft">—</div>
+    </div>
+  </div>
+</div>
+
+<footer>Estimates use published rate cards · routing via OSRM · geocoding via OSM Nominatim</footer>
 
 <div class="modal" id="settingsModal">
   <div class="sheet">
     <h2>Fare Settings</h2>
 
-    <div class="presets" id="presets">
-      <button data-preset="nyc">NYC Taxi</button>
-      <button data-preset="uberx">UberX (avg)</button>
-      <button data-preset="london">London Cab</button>
-      <button data-preset="custom" class="active">Custom</button>
+    <div class="field">
+      <label>City rate card (for Uber/Lyft baseline)</label>
+      <select id="cityPreset"></select>
     </div>
 
     <div class="row2">
       <div class="field">
         <label>Currency</label>
         <select id="currency">
-          <option value="$">USD $</option>
-          <option value="€">EUR €</option>
-          <option value="£">GBP £</option>
-          <option value="¥">JPY ¥</option>
-          <option value="₹">INR ₹</option>
-          <option value="A$">AUD A$</option>
-          <option value="C$">CAD C$</option>
-          <option value="R$">BRL R$</option>
-          <option value="₱">PHP ₱</option>
-          <option value="₫">VND ₫</option>
+          <option>$</option><option>€</option><option>£</option><option>¥</option>
+          <option>₹</option><option>A$</option><option>C$</option><option>R$</option>
+          <option>₱</option><option>₫</option>
         </select>
       </div>
       <div class="field">
         <label>Units</label>
         <select id="units">
-          <option value="km">Kilometers</option>
           <option value="mi">Miles</option>
+          <option value="km">Kilometers</option>
         </select>
       </div>
     </div>
 
+    <h3>Your Rates</h3>
+    <div class="row3">
+      <div class="field"><label>Base</label><input type="number" step="0.01" id="youBase" inputmode="decimal" /></div>
+      <div class="field"><label>Per <span class="unitLbl">mi</span></label><input type="number" step="0.01" id="youDist" inputmode="decimal" /></div>
+      <div class="field"><label>Per min</label><input type="number" step="0.01" id="youMin" inputmode="decimal" /></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Booking fee</label><input type="number" step="0.01" id="youBook" inputmode="decimal" /></div>
+      <div class="field"><label>Minimum fare</label><input type="number" step="0.01" id="youMinFare" inputmode="decimal" /></div>
+    </div>
     <div class="field">
-      <label>Base Fare (flagdown)</label>
-      <input type="number" id="baseFare" step="0.01" min="0" inputmode="decimal" />
+      <label>Discount vs cheaper of Uber/Lyft (%)</label>
+      <input type="number" step="1" min="0" max="50" id="youAutoDiscount" inputmode="decimal" placeholder="Optional — overrides above if > 0" />
     </div>
 
+    <h3>UberX</h3>
+    <div class="row3">
+      <div class="field"><label>Base</label><input type="number" step="0.01" id="uberBase" inputmode="decimal" /></div>
+      <div class="field"><label>Per <span class="unitLbl">mi</span></label><input type="number" step="0.01" id="uberDist" inputmode="decimal" /></div>
+      <div class="field"><label>Per min</label><input type="number" step="0.01" id="uberMin" inputmode="decimal" /></div>
+    </div>
     <div class="row2">
-      <div class="field">
-        <label>Per <span class="unitLbl">km</span></label>
-        <input type="number" id="perDist" step="0.01" min="0" inputmode="decimal" />
-      </div>
-      <div class="field">
-        <label>Per minute</label>
-        <input type="number" id="perMin" step="0.01" min="0" inputmode="decimal" />
+      <div class="field"><label>Booking fee</label><input type="number" step="0.01" id="uberBook" inputmode="decimal" /></div>
+      <div class="field"><label>Minimum fare</label><input type="number" step="0.01" id="uberMinFare" inputmode="decimal" /></div>
+    </div>
+    <div class="field">
+      <label>Uber surge: <span class="surge-val" id="uberSurgeVal">1.0×</span></label>
+      <div class="surge-row">
+        <input type="range" min="1" max="3" step="0.1" id="uberSurge" value="1.0" />
       </div>
     </div>
 
+    <h3>Lyft</h3>
+    <div class="row3">
+      <div class="field"><label>Base</label><input type="number" step="0.01" id="lyftBase" inputmode="decimal" /></div>
+      <div class="field"><label>Per <span class="unitLbl">mi</span></label><input type="number" step="0.01" id="lyftDist" inputmode="decimal" /></div>
+      <div class="field"><label>Per min</label><input type="number" step="0.01" id="lyftMin" inputmode="decimal" /></div>
+    </div>
     <div class="row2">
-      <div class="field">
-        <label>Surge multiplier</label>
-        <input type="number" id="multiplier" step="0.1" min="1" value="1.0" inputmode="decimal" />
-      </div>
-      <div class="field">
-        <label>Minimum fare</label>
-        <input type="number" id="minFare" step="0.01" min="0" inputmode="decimal" />
+      <div class="field"><label>Booking fee</label><input type="number" step="0.01" id="lyftBook" inputmode="decimal" /></div>
+      <div class="field"><label>Minimum fare</label><input type="number" step="0.01" id="lyftMinFare" inputmode="decimal" /></div>
+    </div>
+    <div class="field">
+      <label>Lyft Prime Time: <span class="surge-val" id="lyftSurgeVal">1.0×</span></label>
+      <div class="surge-row">
+        <input type="range" min="1" max="3" step="0.1" id="lyftSurge" value="1.0" />
       </div>
     </div>
 
-    <div class="controls" style="margin-top: 8px;">
+    <div class="actions" style="margin-top: 12px;">
       <button class="secondary" id="cancelSettings">Cancel</button>
-      <button class="primary" id="saveSettings" style="background: var(--accent); color: #2b1f00;">Save</button>
+      <button class="primary" id="saveSettings" style="grid-column: auto;">Save</button>
     </div>
   </div>
 </div>
 
 <script>
 (() => {
-  const PRESETS = {
-    nyc:    { currency: '$',  units: 'mi', baseFare: 3.00, perDist: 3.50, perMin: 0.70, minFare: 3.00 },
-    uberx:  { currency: '$',  units: 'mi', baseFare: 2.55, perDist: 1.75, perMin: 0.35, minFare: 7.00 },
-    london: { currency: '£',  units: 'mi', baseFare: 3.80, perDist: 3.50, perMin: 0.50, minFare: 3.80 },
-    custom: { currency: '$',  units: 'km', baseFare: 2.50, perDist: 1.20, perMin: 0.25, minFare: 4.00 },
+  // ------- City rate cards (approximate, miles, USD) -------
+  // Sources: each rideshare's published rate pages — kept as defaults you can override.
+  const CITIES = {
+    'nyc':       { label: 'New York City',  currency: '$', units: 'mi',
+      uber: { base: 2.55, dist: 1.75, min: 0.35, book: 2.75, minFare: 8.00 },
+      lyft: { base: 1.46, dist: 1.74, min: 0.34, book: 3.40, minFare: 8.30 } },
+    'la':        { label: 'Los Angeles',    currency: '$', units: 'mi',
+      uber: { base: 0.00, dist: 0.80, min: 0.28, book: 2.20, minFare: 6.65 },
+      lyft: { base: 1.00, dist: 0.90, min: 0.21, book: 2.50, minFare: 5.05 } },
+    'sf':        { label: 'San Francisco',  currency: '$', units: 'mi',
+      uber: { base: 2.20, dist: 1.20, min: 0.30, book: 3.85, minFare: 9.05 },
+      lyft: { base: 2.00, dist: 1.15, min: 0.27, book: 4.00, minFare: 8.50 } },
+    'chi':       { label: 'Chicago',        currency: '$', units: 'mi',
+      uber: { base: 1.70, dist: 0.95, min: 0.20, book: 3.10, minFare: 7.00 },
+      lyft: { base: 1.30, dist: 0.95, min: 0.20, book: 3.30, minFare: 6.50 } },
+    'austin':    { label: 'Austin',         currency: '$', units: 'mi',
+      uber: { base: 1.00, dist: 0.90, min: 0.20, book: 2.95, minFare: 6.50 },
+      lyft: { base: 1.30, dist: 0.85, min: 0.18, book: 2.80, minFare: 5.50 } },
+    'seattle':   { label: 'Seattle',        currency: '$', units: 'mi',
+      uber: { base: 1.35, dist: 1.35, min: 0.30, book: 3.00, minFare: 7.50 },
+      lyft: { base: 1.30, dist: 1.25, min: 0.28, book: 3.10, minFare: 7.00 } },
+    'miami':     { label: 'Miami',          currency: '$', units: 'mi',
+      uber: { base: 1.00, dist: 1.00, min: 0.25, book: 2.85, minFare: 5.50 },
+      lyft: { base: 1.00, dist: 0.95, min: 0.22, book: 2.80, minFare: 5.00 } },
+    'dc':        { label: 'Washington DC',  currency: '$', units: 'mi',
+      uber: { base: 1.50, dist: 1.05, min: 0.20, book: 2.80, minFare: 6.55 },
+      lyft: { base: 1.30, dist: 1.00, min: 0.20, book: 2.90, minFare: 6.00 } },
+    'london':    { label: 'London',         currency: '£', units: 'mi',
+      uber: { base: 2.50, dist: 1.25, min: 0.15, book: 1.50, minFare: 5.00 },
+      lyft: { base: 0,    dist: 0,    min: 0,    book: 0,    minFare: 0    } }, // Lyft not available
+    'generic':   { label: 'Other / Generic US', currency: '$', units: 'mi',
+      uber: { base: 1.50, dist: 1.10, min: 0.25, book: 2.75, minFare: 6.50 },
+      lyft: { base: 1.30, dist: 1.05, min: 0.22, book: 2.90, minFare: 6.00 } },
   };
 
-  const DEFAULTS_KEY = 'taximeter.settings.v1';
+  // ------- Default settings -------
+  const SETTINGS_KEY = 'farebeat.settings.v1';
+  const defaultSettingsFor = (cityKey) => {
+    const c = CITIES[cityKey] || CITIES.generic;
+    return {
+      city: cityKey,
+      currency: c.currency,
+      units: c.units,
+      you: { base: 1.50, dist: 0.90, min: 0.18, book: 1.50, minFare: 5.00, autoDiscount: 15 },
+      uber: { ...c.uber, surge: 1.0 },
+      lyft: { ...c.lyft, surge: 1.0 },
+    };
+  };
   const loadSettings = () => {
     try {
-      const raw = localStorage.getItem(DEFAULTS_KEY);
-      if (raw) return { ...PRESETS.custom, multiplier: 1.0, ...JSON.parse(raw) };
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (raw) return { ...defaultSettingsFor('generic'), ...JSON.parse(raw) };
     } catch (e) {}
-    return { ...PRESETS.custom, multiplier: 1.0 };
+    return defaultSettingsFor('generic');
   };
-  const saveSettings = (s) => localStorage.setItem(DEFAULTS_KEY, JSON.stringify(s));
-
+  const persist = (s) => localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
   let settings = loadSettings();
 
-  // State
-  let state = 'idle'; // idle | running | paused
-  let distanceMeters = 0;
-  let timeSeconds = 0;     // total trip time
-  let waitSeconds = 0;     // time below moving threshold
-  let lastTickAt = null;
-  let lastPos = null;
-  let lastSpeed = 0;
-  let watchId = null;
-  let tickHandle = null;
-
-  // DOM
+  // ------- DOM -------
   const $ = (id) => document.getElementById(id);
-  const liveDot = $('liveDot');
-  const fareAmount = $('fareAmount');
-  const curSym = $('curSym');
-  const distVal = $('distVal');
-  const distUnit = $('distUnit');
-  const timeVal = $('timeVal');
-  const speedVal = $('speedVal');
-  const speedUnit = $('speedUnit');
-  const startBtn = $('startBtn');
-  const pauseBtn = $('pauseBtn');
-  const resetBtn = $('resetBtn');
+  const pickup = $('pickup'), dest = $('dest');
+  const pickupSug = $('pickupSug'), destSug = $('destSug');
+  const useMyLoc = $('useMyLoc');
+  const estimateBtn = $('estimateBtn');
   const statusEl = $('status');
-  const bdBase = $('bdBase');
-  const bdDist = $('bdDist');
-  const bdTime = $('bdTime');
-  const bdTotal = $('bdTotal');
-  const bdMult = $('bdMult');
+  const routeCard = $('routeCard');
+  const quotesEl = $('quotes');
+  const routeDist = $('routeDist'), routeTime = $('routeTime');
 
-  // Settings DOM
-  const settingsModal = $('settingsModal');
-  const openSettings = $('openSettings');
-  const cancelSettings = $('cancelSettings');
-  const saveSettingsBtn = $('saveSettings');
-  const currencyEl = $('currency');
-  const unitsEl = $('units');
-  const baseFareEl = $('baseFare');
-  const perDistEl = $('perDist');
-  const perMinEl = $('perMin');
-  const multiplierEl = $('multiplier');
-  const minFareEl = $('minFare');
+  // ------- Geocoding (Nominatim) -------
+  const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+  let pickupCoord = null, destCoord = null;
 
+  async function geocodeSearch(q) {
+    if (!q || q.length < 3) return [];
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return [];
+    return await res.json();
+  }
+
+  const renderSug = (box, items, onPick) => {
+    box.innerHTML = '';
+    if (!items.length) { box.classList.remove('open'); return; }
+    items.forEach(it => {
+      const d = document.createElement('div');
+      d.textContent = it.display_name;
+      d.addEventListener('click', () => onPick(it));
+      box.appendChild(d);
+    });
+    box.classList.add('open');
+  };
+
+  const wireAutocomplete = (input, box, setCoord) => {
+    const run = debounce(async () => {
+      const items = await geocodeSearch(input.value.trim());
+      renderSug(box, items, (it) => {
+        input.value = it.display_name;
+        setCoord({ lat: parseFloat(it.lat), lng: parseFloat(it.lon), label: it.display_name });
+        box.classList.remove('open');
+      });
+    }, 350);
+    input.addEventListener('input', () => { setCoord(null); run(); });
+    input.addEventListener('blur', () => setTimeout(() => box.classList.remove('open'), 150));
+  };
+  wireAutocomplete(pickup, pickupSug, (c) => pickupCoord = c);
+  wireAutocomplete(dest, destSug, (c) => destCoord = c);
+
+  useMyLoc.addEventListener('click', () => {
+    if (!navigator.geolocation) { statusEl.textContent = 'Geolocation not supported'; statusEl.classList.add('err'); return; }
+    statusEl.classList.remove('err');
+    statusEl.textContent = 'Getting your location…';
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      pickupCoord = { lat, lng, label: 'Current location' };
+      // Reverse geocode for a friendly label
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
+        if (r.ok) {
+          const j = await r.json();
+          if (j.display_name) { pickup.value = j.display_name; pickupCoord.label = j.display_name; }
+        }
+      } catch (e) {}
+      if (!pickup.value) pickup.value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      statusEl.textContent = 'Pickup set to your location';
+    }, () => { statusEl.classList.add('err'); statusEl.textContent = 'Could not get your location'; }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  // ------- Routing (OSRM public demo) -------
+  async function getRoute(a, b) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}?overview=false&alternatives=false`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Routing failed');
+    const j = await res.json();
+    if (!j.routes || !j.routes.length) throw new Error('No route found');
+    return { meters: j.routes[0].distance, seconds: j.routes[0].duration };
+  }
+
+  // ------- Fare math -------
+  const toUnits = (meters, units) => units === 'mi' ? meters / 1609.344 : meters / 1000;
   const fmt = (n) => (Math.round(n * 100) / 100).toFixed(2);
-  const fmtTime = (s) => {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = Math.floor(s % 60);
-    const pad = (x) => String(x).padStart(2, '0');
-    return h > 0 ? `${pad(h)}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+  const fmtTime = (sec) => {
+    const m = Math.round(sec / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60), mm = m % 60;
+    return `${h}h ${mm}m`;
   };
 
-  // Haversine in meters
-  const distMeters = (a, b) => {
-    const R = 6371000;
-    const toRad = (d) => d * Math.PI / 180;
-    const dLat = toRad(b.lat - a.lat);
-    const dLon = toRad(b.lng - a.lng);
-    const la1 = toRad(a.lat);
-    const la2 = toRad(b.lat);
-    const h = Math.sin(dLat/2)**2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon/2)**2;
-    return 2 * R * Math.asin(Math.sqrt(h));
-  };
-
-  const distanceInUnit = () => settings.units === 'mi' ? distanceMeters / 1609.344 : distanceMeters / 1000;
-  const speedInUnit = (mps) => settings.units === 'mi' ? mps * 2.23694 : mps * 3.6;
-
-  const computeFare = () => {
-    const base = +settings.baseFare || 0;
-    const perDist = +settings.perDist || 0;
-    const perMin = +settings.perMin || 0;
-    const mult = +settings.multiplier || 1.0;
-    const minFare = +settings.minFare || 0;
-
-    const dCost = distanceInUnit() * perDist;
-    const tCost = (timeSeconds / 60) * perMin;
+  const calcFare = (rates, dist, mins, surge = 1.0) => {
+    const base = +rates.base || 0;
+    const dCost = (+rates.dist || 0) * dist;
+    const tCost = (+rates.min || 0) * mins;
+    const book = +rates.book || 0;
+    const minFare = +rates.minFare || 0;
     let subtotal = base + dCost + tCost;
-    let total = subtotal * mult;
+    let total = subtotal * (surge || 1) + book;
     if (total < minFare) total = minFare;
-    return { base, dCost, tCost, subtotal, total, mult };
+    return total;
   };
 
-  const render = () => {
-    curSym.textContent = settings.currency;
-    distUnit.textContent = settings.units;
-    speedUnit.textContent = settings.units === 'mi' ? 'mph' : 'km/h';
-    document.querySelectorAll('.unitLbl').forEach(el => el.textContent = settings.units);
+  // ------- Estimate flow -------
+  async function runEstimate() {
+    if (!pickupCoord) { statusEl.classList.add('err'); statusEl.textContent = 'Pick a pickup address from the suggestions'; return; }
+    if (!destCoord)   { statusEl.classList.add('err'); statusEl.textContent = 'Pick a destination address from the suggestions'; return; }
+    statusEl.classList.remove('err');
+    statusEl.innerHTML = '<span class="spinner"></span>Calculating route…';
+    estimateBtn.disabled = true;
+    try {
+      const route = await getRoute(pickupCoord, destCoord);
+      const dist = toUnits(route.meters, settings.units);
+      const mins = route.seconds / 60;
 
-    distVal.textContent = fmt(distanceInUnit());
-    timeVal.textContent = fmtTime(timeSeconds);
-    speedVal.textContent = Math.round(speedInUnit(lastSpeed));
+      routeDist.textContent = `${fmt(dist)} ${settings.units}`;
+      routeTime.textContent = fmtTime(route.seconds);
+      routeCard.style.display = 'block';
 
-    const f = computeFare();
-    fareAmount.textContent = fmt(f.total);
-    bdBase.textContent = settings.currency + fmt(f.base);
-    bdDist.textContent = settings.currency + fmt(f.dCost);
-    bdTime.textContent = settings.currency + fmt(f.tCost);
-    bdTotal.textContent = settings.currency + fmt(f.total);
-    bdMult.textContent = (+settings.multiplier || 1).toFixed(1);
+      const uberPrice = calcFare(settings.uber, dist, mins, settings.uber.surge);
+      const lyftPrice = calcFare(settings.lyft, dist, mins, settings.lyft.surge);
 
-    liveDot.classList.toggle('live', state === 'running');
-    startBtn.textContent = state === 'running' ? 'Stop Trip' : (state === 'paused' ? 'Resume' : 'Start Trip');
-    startBtn.classList.toggle('pause', state === 'paused');
-    pauseBtn.disabled = state === 'idle';
-    pauseBtn.textContent = state === 'paused' ? 'Resume' : 'Pause';
-  };
-
-  const tick = () => {
-    if (state !== 'running') return;
-    const now = Date.now();
-    if (lastTickAt) {
-      const dt = (now - lastTickAt) / 1000;
-      timeSeconds += dt;
-    }
-    lastTickAt = now;
-    render();
-  };
-
-  const onPosition = (pos) => {
-    if (state !== 'running') return;
-    const cur = { lat: pos.coords.latitude, lng: pos.coords.longitude, t: pos.timestamp };
-    const acc = pos.coords.accuracy || 0;
-
-    if (lastPos) {
-      const d = distMeters(lastPos, cur);
-      // Filter noise: skip large jumps for low-accuracy fixes, and tiny stationary jitter
-      if (acc < 50 && d >= 2 && d < 200) {
-        distanceMeters += d;
+      // "Your price" — either rules-based or auto-discount vs cheaper competitor
+      let youPrice;
+      const disc = +settings.you.autoDiscount;
+      const competitor = Math.min(
+        uberPrice > 0 ? uberPrice : Infinity,
+        lyftPrice > 0 ? lyftPrice : Infinity
+      );
+      if (disc > 0 && isFinite(competitor)) {
+        youPrice = competitor * (1 - disc / 100);
+      } else {
+        youPrice = calcFare(settings.you, dist, mins, 1.0);
       }
-    }
-    lastSpeed = pos.coords.speed != null && pos.coords.speed >= 0 ? pos.coords.speed : lastSpeed;
-    lastPos = cur;
 
-    if (acc > 50) statusEl.textContent = `Acquiring better GPS signal (±${Math.round(acc)} m)…`;
-    else statusEl.textContent = `GPS locked · ±${Math.round(acc)} m`;
-    statusEl.classList.remove('err');
-    render();
-  };
+      const cur = settings.currency;
+      $('curYou').textContent = cur; $('curUber').textContent = cur; $('curLyft').textContent = cur;
+      $('priceYou').textContent = fmt(youPrice);
+      $('priceUber').textContent = uberPrice > 0 ? fmt(uberPrice) : '—';
+      $('priceLyft').textContent = lyftPrice > 0 ? fmt(lyftPrice) : '—';
 
-  const onPositionError = (err) => {
-    statusEl.classList.add('err');
-    if (err.code === 1) statusEl.textContent = 'Location permission denied — enable GPS to track distance';
-    else if (err.code === 2) statusEl.textContent = 'GPS unavailable';
-    else if (err.code === 3) statusEl.textContent = 'GPS timeout — retrying…';
-    else statusEl.textContent = 'GPS error';
-  };
+      const fmtDelta = (other) => {
+        if (!isFinite(other) || other <= 0) return '—';
+        const diff = other - youPrice;
+        if (diff > 0) return `you save ${cur}${fmt(diff)} (${Math.round(diff/other*100)}%)`;
+        if (diff < 0) return `you’re ${cur}${fmt(-diff)} higher`;
+        return 'same price';
+      };
+      $('deltaYou').textContent = isFinite(competitor) ? `vs cheapest: ${cur}${fmt(competitor)}` : '—';
+      $('deltaUber').textContent = fmtDelta(uberPrice);
+      $('deltaLyft').textContent = fmtDelta(lyftPrice);
 
-  const startGPS = () => {
-    if (!('geolocation' in navigator)) {
+      // Win badge
+      const youBadge = $('youBadge');
+      const beatsAll = youPrice <= uberPrice && (lyftPrice <= 0 || youPrice <= lyftPrice);
+      youBadge.textContent = beatsAll ? 'BEATS' : 'HIGHER';
+      youBadge.className = 'badge ' + (beatsAll ? 'win' : 'lose');
+
+      quotesEl.style.display = 'flex';
+      statusEl.textContent = beatsAll
+        ? `You beat ${cur}${fmt(competitor)} by ${cur}${fmt(competitor - youPrice)}`
+        : `Your price is above the cheapest option — adjust rates or discount`;
+    } catch (e) {
       statusEl.classList.add('err');
-      statusEl.textContent = 'Geolocation not supported in this browser';
-      return false;
+      statusEl.textContent = 'Could not calculate route — try different addresses';
+      console.error(e);
+    } finally {
+      estimateBtn.disabled = false;
     }
-    watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
-      enableHighAccuracy: true,
-      maximumAge: 1000,
-      timeout: 15000,
-    });
-    return true;
-  };
+  }
+  estimateBtn.addEventListener('click', runEstimate);
 
-  const stopGPS = () => {
-    if (watchId != null) {
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-    }
-  };
-
-  const start = () => {
-    if (state === 'running') {
-      // Stop the trip
-      state = 'idle';
-      stopGPS();
-      clearInterval(tickHandle);
-      tickHandle = null;
-      lastTickAt = null;
-      statusEl.textContent = 'Trip ended. Press Reset to clear or Start for a new trip.';
-      statusEl.classList.remove('err');
-      render();
-      return;
-    }
-    if (state === 'paused') {
-      state = 'running';
-      lastTickAt = Date.now();
-      lastPos = null;
-      startGPS();
-      tickHandle = setInterval(tick, 250);
-      statusEl.textContent = 'Resumed';
-      render();
-      return;
-    }
-    // idle -> running
-    state = 'running';
-    lastTickAt = Date.now();
-    lastPos = null;
-    if (!startGPS()) {
-      state = 'idle';
-      return;
-    }
-    statusEl.textContent = 'Waiting for GPS fix…';
-    statusEl.classList.remove('err');
-    tickHandle = setInterval(tick, 250);
-    render();
-  };
-
-  const pause = () => {
-    if (state === 'idle') return;
-    if (state === 'running') {
-      state = 'paused';
-      stopGPS();
-      clearInterval(tickHandle);
-      tickHandle = null;
-      lastTickAt = null;
-      lastSpeed = 0;
-      statusEl.textContent = 'Paused — fare frozen';
-      render();
-    } else if (state === 'paused') {
-      start(); // resume
-    }
-  };
-
-  const reset = () => {
-    if (state !== 'idle' && !confirm('End and reset the current trip?')) return;
-    state = 'idle';
-    stopGPS();
-    clearInterval(tickHandle);
-    tickHandle = null;
-    distanceMeters = 0;
-    timeSeconds = 0;
-    waitSeconds = 0;
-    lastPos = null;
-    lastTickAt = null;
-    lastSpeed = 0;
-    statusEl.textContent = 'Press Start to begin trip';
-    statusEl.classList.remove('err');
-    render();
-  };
-
-  // Settings modal
-  const populateSettingsForm = () => {
-    currencyEl.value = settings.currency;
-    unitsEl.value = settings.units;
-    baseFareEl.value = settings.baseFare;
-    perDistEl.value = settings.perDist;
-    perMinEl.value = settings.perMin;
-    multiplierEl.value = settings.multiplier ?? 1.0;
-    minFareEl.value = settings.minFare;
-  };
-
-  const openModal = () => { populateSettingsForm(); settingsModal.classList.add('open'); };
-  const closeModal = () => settingsModal.classList.remove('open');
-
-  document.querySelectorAll('#presets button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#presets button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const p = PRESETS[btn.dataset.preset];
-      if (!p) return;
-      currencyEl.value = p.currency;
-      unitsEl.value = p.units;
-      baseFareEl.value = p.baseFare;
-      perDistEl.value = p.perDist;
-      perMinEl.value = p.perMin;
-      minFareEl.value = p.minFare;
-    });
+  // ------- Settings UI -------
+  const cityPreset = $('cityPreset');
+  Object.entries(CITIES).forEach(([k, v]) => {
+    const o = document.createElement('option'); o.value = k; o.textContent = v.label;
+    cityPreset.appendChild(o);
   });
 
-  openSettings.addEventListener('click', openModal);
-  cancelSettings.addEventListener('click', closeModal);
-  saveSettingsBtn.addEventListener('click', () => {
+  const ids = {
+    currency: 'currency', units: 'units',
+    you: { base: 'youBase', dist: 'youDist', min: 'youMin', book: 'youBook', minFare: 'youMinFare', autoDiscount: 'youAutoDiscount' },
+    uber: { base: 'uberBase', dist: 'uberDist', min: 'uberMin', book: 'uberBook', minFare: 'uberMinFare', surge: 'uberSurge' },
+    lyft: { base: 'lyftBase', dist: 'lyftDist', min: 'lyftMin', book: 'lyftBook', minFare: 'lyftMinFare', surge: 'lyftSurge' },
+  };
+
+  const fillForm = () => {
+    cityPreset.value = settings.city || 'generic';
+    $(ids.currency).value = settings.currency;
+    $(ids.units).value = settings.units;
+    document.querySelectorAll('.unitLbl').forEach(el => el.textContent = settings.units);
+    for (const who of ['you', 'uber', 'lyft']) {
+      for (const k of Object.keys(ids[who])) $(ids[who][k]).value = settings[who][k];
+    }
+    $('uberSurgeVal').textContent = (+settings.uber.surge).toFixed(1) + '×';
+    $('lyftSurgeVal').textContent = (+settings.lyft.surge).toFixed(1) + '×';
+  };
+
+  cityPreset.addEventListener('change', () => {
+    const c = CITIES[cityPreset.value];
+    if (!c) return;
+    $(ids.currency).value = c.currency;
+    $(ids.units).value = c.units;
+    document.querySelectorAll('.unitLbl').forEach(el => el.textContent = c.units);
+    for (const k of Object.keys(ids.uber)) {
+      if (k === 'surge') continue;
+      $(ids.uber[k]).value = c.uber[k];
+      $(ids.lyft[k]).value = c.lyft[k];
+    }
+  });
+
+  $('uberSurge').addEventListener('input', (e) => $('uberSurgeVal').textContent = (+e.target.value).toFixed(1) + '×');
+  $('lyftSurge').addEventListener('input', (e) => $('lyftSurgeVal').textContent = (+e.target.value).toFixed(1) + '×');
+
+  const settingsModal = $('settingsModal');
+  $('openSettings').addEventListener('click', () => { fillForm(); settingsModal.classList.add('open'); });
+  $('cancelSettings').addEventListener('click', () => settingsModal.classList.remove('open'));
+  settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) settingsModal.classList.remove('open'); });
+
+  $('saveSettings').addEventListener('click', () => {
     settings = {
-      currency: currencyEl.value,
-      units: unitsEl.value,
-      baseFare: parseFloat(baseFareEl.value) || 0,
-      perDist: parseFloat(perDistEl.value) || 0,
-      perMin: parseFloat(perMinEl.value) || 0,
-      multiplier: parseFloat(multiplierEl.value) || 1.0,
-      minFare: parseFloat(minFareEl.value) || 0,
+      city: cityPreset.value,
+      currency: $(ids.currency).value,
+      units: $(ids.units).value,
+      you: {
+        base: parseFloat($(ids.you.base).value) || 0,
+        dist: parseFloat($(ids.you.dist).value) || 0,
+        min:  parseFloat($(ids.you.min).value) || 0,
+        book: parseFloat($(ids.you.book).value) || 0,
+        minFare: parseFloat($(ids.you.minFare).value) || 0,
+        autoDiscount: parseFloat($(ids.you.autoDiscount).value) || 0,
+      },
+      uber: {
+        base: parseFloat($(ids.uber.base).value) || 0,
+        dist: parseFloat($(ids.uber.dist).value) || 0,
+        min:  parseFloat($(ids.uber.min).value) || 0,
+        book: parseFloat($(ids.uber.book).value) || 0,
+        minFare: parseFloat($(ids.uber.minFare).value) || 0,
+        surge: parseFloat($(ids.uber.surge).value) || 1.0,
+      },
+      lyft: {
+        base: parseFloat($(ids.lyft.base).value) || 0,
+        dist: parseFloat($(ids.lyft.dist).value) || 0,
+        min:  parseFloat($(ids.lyft.min).value) || 0,
+        book: parseFloat($(ids.lyft.book).value) || 0,
+        minFare: parseFloat($(ids.lyft.minFare).value) || 0,
+        surge: parseFloat($(ids.lyft.surge).value) || 1.0,
+      },
     };
-    saveSettings(settings);
-    closeModal();
-    render();
+    persist(settings);
+    settingsModal.classList.remove('open');
+    document.querySelectorAll('.unitLbl').forEach(el => el.textContent = settings.units);
   });
 
-  settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeModal(); });
-
-  startBtn.addEventListener('click', start);
-  pauseBtn.addEventListener('click', pause);
-  resetBtn.addEventListener('click', reset);
-
-  // Keep screen alive when running (best-effort)
-  let wakeLock = null;
-  document.addEventListener('visibilitychange', async () => {
-    if (state === 'running' && document.visibilityState === 'visible' && 'wakeLock' in navigator) {
-      try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
-    }
-  });
-
-  render();
+  document.querySelectorAll('.unitLbl').forEach(el => el.textContent = settings.units);
 })();
 </script>
 </body>
