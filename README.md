@@ -35,3 +35,7 @@ DSRP is a universal model of structured thinking. In this agent it maps to email
 - **S — Systems:** the sequence is a system; each email is a part with one job and one CTA.
 - **R — Relationships:** cause→effect, claim→proof, and email→email open loops stay intact.
 - **P — Perspectives:** write from the reader's, the skeptic's, and the future-self's point of view.
+
+The moves aren't used in isolation. The agent chains them into **mental move mash-ups** — ordered
+combinations (max 10 moves) chosen to fit the content of each email — and guarantees that D, S, R,
+and P are each surfaced somewhere across the whole flow.
