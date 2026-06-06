@@ -1,58 +1,41 @@
-<h1>JWipe - Disk Sanitization</h1>
+# Email Marketing DSRP Agent
 
- ### [YouTube Demonstration](https://youtu.be/7eJexJVCqJo)
+A standalone, portable **system prompt** for an AI email-marketing strategist that writes
+email **sequences** structured with Derek Cabrera's **DSRP** systems-thinking framework
+(Distinctions, Systems, Relationships, Perspectives).
 
-<h2>Description</h2>
-Project consists of a simple PowerShell script that walks the user through "zeroing out" (wiping) any drives that are connected to the system. The utility allows you to select the target disk and choose the number of passes that are performed. The PowerShell script will configure a diskpart script file based on the user's selections and then launch Diskpart to perform the disk sanitization.
-<br />
+## What it does
 
+1. **Writes email sequences** using DSRP as the structural method behind the copy.
+2. **Tracks email trends & subscriber fatigue** — designs against the patterns that cause
+   people to tune out, unsubscribe, or flag as spam, and follows current deliverability norms.
+3. **Researches fitness & corrective-exercise topics** when a campaign needs it, with
+   credibility and safety guardrails (no medical claims, real proof only, disclaimers).
 
-<h2>Languages and Utilities Used</h2>
+## Files
 
-- <b>PowerShell</b> 
-- <b>Diskpart</b>
+| File | Purpose |
+|------|---------|
+| [`email-marketing-dsrp-agent.md`](./email-marketing-dsrp-agent.md) | The agent. Copy the text between the `=== SYSTEM PROMPT ===` markers and paste it as the system prompt of any capable LLM (Claude, ChatGPT, API). Self-contained. |
 
-<h2>Environments Used </h2>
+## Quick start
 
-- <b>Windows 10</b> (21H2)
+1. Open `email-marketing-dsrp-agent.md`.
+2. Copy everything between `=== SYSTEM PROMPT START ===` and `=== SYSTEM PROMPT END ===`.
+3. Paste it as the system / custom-instructions message for your LLM.
+4. Send your campaign brief (audience, goal, offer, voice, region, ESP) as the first message.
 
-<h2>Program walk-through:</h2>
+See the bottom of the agent file for an example brief.
 
-<p align="center">
-Launch the utility: <br/>
-<img src="https://i.imgur.com/62TgaWL.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Select the disk:  <br/>
-<img src="https://i.imgur.com/tcTyMUE.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Enter the number of passes: <br/>
-<img src="https://i.imgur.com/nCIbXbg.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Confirm your selection:  <br/>
-<img src="https://i.imgur.com/cdFHBiU.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Wait for process to complete (may take some time):  <br/>
-<img src="https://i.imgur.com/JL945Ga.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Sanitization complete:  <br/>
-<img src="https://i.imgur.com/K71yaM2.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-<br />
-<br />
-Observe the wiped disk:  <br/>
-<img src="https://i.imgur.com/AeZkvFQ.png" height="80%" width="80%" alt="Disk Sanitization Steps"/>
-</p>
+## DSRP, briefly
 
-<!--
- ```diff
-- text in red
-+ text in green
-! text in orange
-# text in gray
-@@ text in purple (and bold)@@
-```
---!>
+DSRP is a universal model of structured thinking. In this agent it maps to email like so:
+
+- **D — Distinctions:** who/what this is *and is not*; one idea per email.
+- **S — Systems:** the sequence is a system; each email is a part with one job and one CTA.
+- **R — Relationships:** cause→effect, claim→proof, and email→email open loops stay intact.
+- **P — Perspectives:** write from the reader's, the skeptic's, and the future-self's point of view.
+
+The moves aren't used in isolation. The agent chains them into **mental move mash-ups** — ordered
+combinations (max 10 moves) chosen to fit the content of each email — and guarantees that D, S, R,
+and P are each surfaced somewhere across the whole flow.
