@@ -1,0 +1,24 @@
+{
+  "name": "live-tracking-eta",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated dispatch: Google Calendar appointments trigger a Quo (OpenPhone) SMS with a live OwnTracks map and Google Distance Matrix ETA, auto-expiring on arrival.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "googleapis": "^173.0.0",
+    "node-cron": "^4.6.0"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8"
+  }
+}

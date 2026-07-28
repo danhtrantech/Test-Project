@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Live tracking</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #191c23;
+    --line: #2a2f3a;
+    --text: #f2f4f8;
+    --muted: #98a1b3;
+    --accent: #3ddc84;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+  }
+  #map { position: absolute; inset: 0; background: var(--bg); }
+  .leaflet-container { background: #0f1115; }
+
+  .panel {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 1000;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    background: var(--card);
+    border-top: 1px solid var(--line);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 30px rgba(0,0,0,.45);
+  }
+  @media (min-width: 640px) {
+    .panel { left: auto; right: 16px; bottom: 16px; width: 340px; border-radius: 16px; border: 1px solid var(--line); }
+  }
+
+  .eta-row { display: flex; align-items: baseline; gap: 10px; }
+  .eta-value { font-size: 34px; font-weight: 650; letter-spacing: -.02em; }
+  .eta-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .meta { margin-top: 6px; font-size: 14px; color: var(--muted); }
+  .meta strong { color: var(--text); font-weight: 550; }
+
+  .status {
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--muted);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--accent); box-shadow: 0 0 0 0 rgba(61,220,132,.6); animation: pulse 2s infinite; }
+  .dot.stale { background: #f0a020; }
+  .dot.down { background: #e2544c; }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(61,220,132,.5); }
+    70%  { box-shadow: 0 0 0 9px rgba(61,220,132,0); }
+    100% { box-shadow: 0 0 0 0 rgba(61,220,132,0); }
+  }
+
+  .car-marker {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent); border: 3px solid #0f1115;
+    box-shadow: 0 0 0 3px rgba(61,220,132,.35), 0 2px 8px rgba(0,0,0,.5);
+  }
+  .dest-marker {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; border: 4px solid #e2544c;
+    box-shadow: 0 2px 8px rgba(0,0,0,.5);
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel">
+  <div class="eta-row">
+    <div class="eta-value" id="eta">&mdash;</div>
+    <div class="eta-label" id="etaLabel">away</div>
+  </div>
+  <div class="meta" id="meta">Waiting for the driver&rsquo;s location&hellip;</div>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="statusText">Connecting&hellip;</span>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var token = window.location.pathname.split('/').filter(Boolean).pop();
+
+  var map = L.map('map', { zoomControl: false, attributionControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+
+  map.setView([39.8283, -98.5795], 4); // continental US until the first fix lands
+
+  var carIcon = L.divIcon({ className: '', html: '<div class="car-marker"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
+  var destIcon = L.divIcon({ className: '', html: '<div class="dest-marker"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+
+  var carMarker = null;
+  var destMarker = null;
+  var trail = L.polyline([], { color: '#3ddc84', weight: 3, opacity: 0.65 }).addTo(map);
+  var hasFitted = false;
+  var lastFixAt = null;
+
+  var el = {
+    eta: document.getElementById('eta'),
+    etaLabel: document.getElementById('etaLabel'),
+    meta: document.getElementById('meta'),
+    dot: document.getElementById('dot'),
+    statusText: document.getElementById('statusText')
+  };
+
+  function setStatus(cls, text) {
+    el.dot.className = 'dot' + (cls ? ' ' + cls : '');
+    el.statusText.textContent = text;
+  }
+
+  function miles(meters) {
+    return (meters / 1609.344).toFixed(meters < 1609 ? 2 : 1) + ' mi';
+  }
+
+  function clockTime(iso) {
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function render(state) {
+    if (!state || state.status !== 'active') {
+      // The driver arrived (or the link expired) — swap to the closing page.
+      window.location.reload();
+      return;
+    }
+
+    if (state.destination && !destMarker) {
+      destMarker = L.marker([state.destination.lat, state.destination.lng], { icon: destIcon })
+        .addTo(map)
+        .bindPopup(state.destination.address || 'Destination');
+    }
+
+    if (state.driver) {
+      var pos = [state.driver.lat, state.driver.lng];
+      lastFixAt = Date.now() - (state.driver.ageSeconds || 0) * 1000;
+
+      if (carMarker) {
+        carMarker.setLatLng(pos);
+      } else {
+        carMarker = L.marker(pos, { icon: carIcon, zIndexOffset: 500 }).addTo(map).bindPopup('Driver');
+      }
+
+      var points = trail.getLatLngs();
+      var last = points[points.length - 1];
+      if (!last || last.lat !== pos[0] || last.lng !== pos[1]) {
+        trail.addLatLng(pos);
+        if (points.length > 500) trail.setLatLngs(points.slice(-500));
+      }
+
+      if (!hasFitted && destMarker) {
+        map.fitBounds(L.latLngBounds([pos, destMarker.getLatLng()]).pad(0.25));
+        hasFitted = true;
+      }
+    }
+
+    if (state.eta) {
+      el.eta.textContent = state.eta.text || '—';
+      el.etaLabel.textContent = 'away';
+      var bits = [];
+      if (state.eta.distanceMeters != null) bits.push('<strong>' + miles(state.eta.distanceMeters) + '</strong> to go');
+      if (state.eta.arrivalTime) bits.push('arriving around <strong>' + clockTime(state.eta.arrivalTime) + '</strong>');
+      el.meta.innerHTML = bits.join(' &middot; ');
+    } else if (state.driver) {
+      el.eta.textContent = '—';
+      el.meta.textContent = 'Calculating ETA…';
+    } else {
+      el.eta.textContent = '—';
+      el.meta.textContent = 'Waiting for the driver’s location…';
+    }
+
+    updateFreshness();
+  }
+
+  function updateFreshness() {
+    if (!lastFixAt) {
+      setStatus('', 'Waiting for first location');
+      return;
+    }
+    var age = Math.round((Date.now() - lastFixAt) / 1000);
+    if (age < 90) setStatus('live', 'Live · updated just now');
+    else if (age < 600) setStatus('stale', 'Updated ' + Math.round(age / 60) + ' min ago');
+    else setStatus('down', 'Location paused · updated ' + Math.round(age / 60) + ' min ago');
+  }
+  setInterval(updateFreshness, 5000);
+
+  // --- transport: SSE, with polling as a fallback ---------------------------
+
+  var pollTimer = null;
+
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(function () {
+      fetch('/api/track/' + token, { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(render)
+        .catch(function () { setStatus('down', 'Connection lost · retrying'); });
+    }, 15000);
+  }
+
+  function connect() {
+    if (!window.EventSource) {
+      startPolling();
+      fetch('/api/track/' + token, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(render);
+      return;
+    }
+
+    var source = new EventSource('/api/track/' + token + '/stream');
+
+    source.onmessage = function (event) {
+      try {
+        render(JSON.parse(event.data));
+      } catch (e) { /* ignore malformed frame */ }
+    };
+
+    source.onerror = function () {
+      source.close();
+      setStatus('down', 'Reconnecting…');
+      startPolling();
+      setTimeout(function () {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        connect();
+      }, 8000);
+    };
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

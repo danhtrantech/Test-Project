@@ -1,0 +1,39 @@
+# Optional: lets Render create the service from this repo in one click
+# (Dashboard -> New -> Blueprint). You can also just create a Web Service by hand.
+services:
+  - type: web
+    name: live-tracking-eta
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: QUO_API_KEY
+        sync: false
+      - key: QUO_FROM_NUMBER
+        sync: false
+      - key: OWNTRACKS_SECRET
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: LEAD_MINUTES
+        value: "60"
+      - key: GEOFENCE_METERS
+        value: "100"
+      - key: TIMEZONE
+        value: America/Los_Angeles
+      - key: DATA_DIR
+        value: /var/data
+    # A persistent disk keeps tracking sessions across restarts and deploys, so a
+    # redeploy mid-appointment cannot send the same client a second text.
+    disk:
+      name: dispatch-data
+      mountPath: /var/data
+      sizeGB: 1
