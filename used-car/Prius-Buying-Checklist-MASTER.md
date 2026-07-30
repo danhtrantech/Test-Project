@@ -78,8 +78,13 @@ Started 2026-07-30 · Skill: `used-car-buying` v0.1 (Ahmed)
       kbb.com, truecar.com, edmunds.com, and dealer sites incl. toyotaofhb.com).
       Not a site-side block and not something to route around. Needs either a session
       with those hosts allowed, or Danh pulls the listings himself using §4.
-- [ ] **Phase 2 — Initial dealer contact** — not started. Also needs Claude-in-Chrome
-      on Danh's signed-in Gmail; the Gmail connector can draft but cannot send.
+- [~] **Phase 2 — Initial dealer contact** — 5 inquiry emails drafted in Danh's Gmail
+      2026-07-30, one per dealer in §4, all compliant with §0. **Not sent.** Each draft
+      is addressed to Danh himself because Gmail requires a recipient and no verified
+      dealer email addresses could be found — search returns only masked addresses
+      (e.g. `c******@tustintoyota.com`) and the dealer sites are unreachable from here.
+      Danh replaces the To: field and sends. Actual sending needs Claude-in-Chrome on
+      his signed-in browser regardless; the Gmail connector drafts but cannot send.
 - [ ] **Phase 3 — Negotiating & closing** — not started.
 
 ---
@@ -89,13 +94,13 @@ Started 2026-07-30 · Skill: `used-car-buying` v0.1 (Ahmed)
 Verified as existing dealers in the search radius. **None contacted yet.** Inventory
 not yet verified — that's Phase 1b.
 
-| Dealer | City | Site | Contacted | Notes |
-|---|---|---|---|---|
-| Toyota of Huntington Beach | Huntington Beach | toyotaofhb.com | ☐ | Large TCUV inventory |
-| Toyota of Anaheim | Anaheim | toyotaofanaheim.com | ☐ | Closest to Garden Grove |
-| Toyota of Orange | Orange | toyotaoforange.com | ☐ | Wilson Automotive group |
-| Tustin Toyota | Tustin | tustintoyota.com | ☐ | |
-| AutoNation Toyota Irvine | Irvine | autonationtoyotairvine.com | ☐ | CPO-heavy |
+| Dealer | City | Site | Draft ready | Sent | Notes |
+|---|---|---|---|---|---|
+| Toyota of Huntington Beach | Huntington Beach | toyotaofhb.com | ✅ | ☐ | Large TCUV inventory; draft asks what certification costs |
+| Toyota of Anaheim | Anaheim | toyotaofanaheim.com | ✅ | ☐ | Closest to Garden Grove; 1331 N Euclid St |
+| Toyota of Orange | Orange | toyotaoforange.com | ✅ | ☐ | Wilson Automotive group; draft asks across the group |
+| Tustin Toyota | Tustin | tustintoyota.com | ✅ | ☐ | Internet sales manager: Cody Carter |
+| AutoNation Toyota Irvine | Irvine | autonationtoyotairvine.com | ✅ | ☐ | CPO-heavy; draft demands add-ons as separate line items |
 
 Worth adding once reachable: Cabe Toyota (Long Beach), Norwalk Toyota, Longo Toyota
 (El Monte — largest Toyota dealer in the US, worth the drive), Puente Hills Toyota.
