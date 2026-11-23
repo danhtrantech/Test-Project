@@ -1,0 +1,10 @@
+# Core deps are stdlib; these are optional and used only when present.
+# Install with: pip install -r requirements.txt
+
+# PDF text extraction
+pypdf>=4.0
+
+# Anthropic SDK for Claude-powered document extraction and the agent.
+# Needs ANTHROPIC_API_KEY at runtime. If unavailable, qbai falls back to the
+# heuristic extractor (no network) automatically.
+anthropic>=0.40

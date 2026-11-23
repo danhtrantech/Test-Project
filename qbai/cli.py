@@ -9,11 +9,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import ap, ar, expenses, payments
+from . import ap, ar, documents, expenses, extract, ingest, payments
 from .coa import add_account, list_accounts, seed_chart_of_accounts
 from .db import get_connection, init_db
 from .ledger import (
-    JournalLine, get_entry, list_entries, post_journal_entry, void_entry,
+    JournalLine, approve_proposed, get_entry, list_entries, post_journal_entry, void_entry,
 )
 from .money import format_money, to_cents
 from .parties import add_party, list_parties, require_party_by_name
@@ -398,6 +398,175 @@ def cmd_expense_add(args) -> int:
     return 0
 
 
+# ---- Documents + ingestion -----------------------------------------------
+
+def cmd_doc_ingest(args) -> int:
+    conn = _conn(args)
+    doc_id = documents.ingest_file(
+        conn, args.path, doc_type=args.type, db_path=args.db, actor=args.user or "cli",
+    )
+    doc = documents.get_document(conn, doc_id)
+    print(f"Ingested document #{doc_id}: {doc.original_name} "
+          f"({doc.mime_type or 'unknown'}, {doc.size_bytes} bytes)")
+    if doc.extraction_status == "failed":
+        print(f"  Text extraction failed: {doc.extraction_error}")
+    if not args.extract:
+        print(f"Run `qbai doc extract {doc_id}` to run Claude extraction and propose an entry.")
+        return 0
+    return cmd_doc_extract(_fake(args, doc_id=doc_id, auto_propose=args.propose))
+
+
+def cmd_doc_extract(args) -> int:
+    conn = _conn(args)
+    doc = documents.get_document(conn, args.doc_id)
+    if doc is None:
+        print(f"No document #{args.doc_id}", file=sys.stderr)
+        return 1
+    if doc.extracted_text is None:
+        print(f"Document #{doc.id} has no extracted text ({doc.extraction_error}); "
+              "cannot run text extraction.", file=sys.stderr)
+        return 1
+    coa = [{"code": a.code, "name": a.name, "type": a.type}
+           for a in list_accounts(conn)]
+    result = extract.extract(
+        doc.extracted_text, chart_of_accounts=coa,
+        doc_type_hint=doc.doc_type, force_heuristic=args.heuristic,
+    )
+    documents.set_extracted_data(
+        conn, doc.id, result.data, extractor=result.extractor,
+        doc_type=result.data.get("doc_type"),
+    )
+    print(f"Extracted doc #{doc.id} with {result.extractor}" +
+          (f" ({result.model})" if result.model else "") +
+          f"; doc_type={result.data.get('doc_type')}, "
+          f"total={format_money(int(result.data.get('total_cents') or 0))}")
+    if args.auto_propose:
+        return cmd_doc_propose(_fake(args, doc_id=doc.id))
+    print(f"Run `qbai doc propose {doc.id}` to stage a proposed entry.")
+    return 0
+
+
+def cmd_doc_propose(args) -> int:
+    conn = _conn(args)
+    res = ingest.propose_from_document(
+        conn, args.doc_id,
+        cash_account_code=getattr(args, "cash_account", None) or "1010",
+        actor=getattr(args, "user", None) or "cli",
+    )
+    print(f"Proposed {res.kind} #{res.target_id} from doc #{res.doc_id}")
+    print(f"Next step: {res.requires}")
+    return 0
+
+
+def cmd_doc_list(args) -> int:
+    conn = _conn(args)
+    rows = documents.list_documents(conn, status=args.status)
+    if not rows:
+        print("(no documents)")
+        return 0
+    print(f"{'ID':<5} {'NAME':<30} {'MIME':<24} {'STATUS':<10} {'TYPE':<16} PROPOSED")
+    for r in rows:
+        proposed = []
+        if r["proposed_je_id"]:
+            proposed.append(f"JE#{r['proposed_je_id']}")
+        if r["proposed_bill_id"]:
+            proposed.append(f"bill#{r['proposed_bill_id']}")
+        if r["proposed_invoice_id"]:
+            proposed.append(f"invoice#{r['proposed_invoice_id']}")
+        print(f"{r['id']:<5} {r['original_name'][:30]:<30} "
+              f"{(r['mime_type'] or '')[:24]:<24} "
+              f"{r['extraction_status']:<10} {(r['doc_type'] or '')[:16]:<16} "
+              f"{', '.join(proposed) or '-'}")
+    return 0
+
+
+def cmd_doc_show(args) -> int:
+    conn = _conn(args)
+    doc = documents.get_document(conn, args.doc_id)
+    if doc is None:
+        print(f"No document #{args.doc_id}", file=sys.stderr)
+        return 1
+    print(f"Document #{doc.id}: {doc.original_name}")
+    print(f"  Stored:      {doc.stored_path}")
+    print(f"  sha256:      {doc.sha256}")
+    print(f"  Mime:        {doc.mime_type}  ({doc.size_bytes} bytes)")
+    print(f"  Doc type:    {doc.doc_type or '(not set)'}")
+    print(f"  Status:      {doc.extraction_status}"
+          + (f"  — {doc.extraction_error}" if doc.extraction_error else ""))
+    print(f"  Extractor:   {doc.extractor or '-'}")
+    proposed = []
+    if doc.proposed_je_id:
+        proposed.append(f"JE#{doc.proposed_je_id}")
+    if doc.proposed_bill_id:
+        proposed.append(f"bill#{doc.proposed_bill_id}")
+    if doc.proposed_invoice_id:
+        proposed.append(f"invoice#{doc.proposed_invoice_id}")
+    print(f"  Proposed:    {', '.join(proposed) or '-'}")
+    if doc.extracted_data:
+        import json as _json
+        print("\nExtracted data:")
+        print(_json.dumps(doc.extracted_data, indent=2))
+    elif doc.extracted_text:
+        preview = doc.extracted_text[:500]
+        print("\nExtracted text (first 500 chars):")
+        print(preview)
+    return 0
+
+
+# ---- Proposed journal entries --------------------------------------------
+
+def cmd_propose_list(args) -> int:
+    conn = _conn(args)
+    rows = list_entries(conn, status="proposed", limit=args.limit)
+    if not rows:
+        print("(no proposed entries)")
+        return 0
+    print(f"{'ID':<5} {'DATE':<12} {'SOURCE':<10} MEMO")
+    for r in rows:
+        print(f"{r['id']:<5} {r['entry_date']:<12} "
+              f"{(r['source_type'] or ''):<10} {r['memo'] or ''}")
+    return 0
+
+
+def cmd_propose_approve(args) -> int:
+    conn = _conn(args)
+    approve_proposed(conn, args.entry_id, approved_by=args.user or "cli")
+    print(f"Approved proposed JE #{args.entry_id}; now posted.")
+    return 0
+
+
+def cmd_propose_reject(args) -> int:
+    conn = _conn(args)
+    with conn:
+        row = conn.execute(
+            "SELECT status FROM journal_entries WHERE id = ?", (args.entry_id,)
+        ).fetchone()
+        if row is None:
+            print(f"No JE #{args.entry_id}", file=sys.stderr)
+            return 1
+        if row["status"] != "proposed":
+            print(f"JE #{args.entry_id} is not proposed (status={row['status']!r})",
+                  file=sys.stderr)
+            return 1
+        # Delete the proposed entry and its lines (cascade via FK).
+        conn.execute("DELETE FROM journal_lines WHERE journal_entry_id = ?", (args.entry_id,))
+        conn.execute("DELETE FROM journal_entries WHERE id = ?", (args.entry_id,))
+        # Clear the proposed_je_id on any document that pointed at it.
+        conn.execute(
+            "UPDATE documents SET proposed_je_id = NULL WHERE proposed_je_id = ?",
+            (args.entry_id,),
+        )
+    print(f"Rejected proposed JE #{args.entry_id} (deleted).")
+    return 0
+
+
+def _fake(args, **overrides):
+    """Build a lightweight Namespace that inherits --db / --user / chains calls."""
+    import types
+    merged = {**vars(args), **overrides}
+    return types.SimpleNamespace(**merged)
+
+
 def cmd_trial_balance(args) -> int:
     conn = _conn(args)
     rows = trial_balance(conn, as_of=args.as_of)
@@ -581,6 +750,48 @@ def build_parser() -> argparse.ArgumentParser:
     ea.add_argument("--memo")
     ea.add_argument("--reference")
     ea.set_defaults(func=cmd_expense_add)
+
+    # ---- documents + ingestion ----
+    doc = sub.add_parser("doc", help="documents and AI extraction")
+    dsub = doc.add_subparsers(dest="doc_cmd", required=True)
+    di = dsub.add_parser("ingest", help="upload a file; optionally extract + propose")
+    di.add_argument("path")
+    di.add_argument("--type", help="doc type hint (receipt|bill|customer_invoice|other)")
+    di.add_argument("--extract", action="store_true",
+                    help="also run extraction right after ingest")
+    di.add_argument("--propose", action="store_true",
+                    help="with --extract, also propose an entry")
+    di.add_argument("--heuristic", action="store_true",
+                    help="force the no-network heuristic extractor")
+    di.set_defaults(func=cmd_doc_ingest, auto_propose=False)
+    de = dsub.add_parser("extract", help="run Claude extraction on a document")
+    de.add_argument("doc_id", type=int)
+    de.add_argument("--heuristic", action="store_true")
+    de.add_argument("--auto-propose", action="store_true", dest="auto_propose")
+    de.set_defaults(func=cmd_doc_extract)
+    dp = dsub.add_parser("propose", help="stage a bill/invoice/JE from extracted data")
+    dp.add_argument("doc_id", type=int)
+    dp.add_argument("--cash-account", help="default 1010 (Checking)")
+    dp.set_defaults(func=cmd_doc_propose)
+    dls = dsub.add_parser("list")
+    dls.add_argument("--status", choices=["pending", "extracted", "failed"])
+    dls.set_defaults(func=cmd_doc_list)
+    ds = dsub.add_parser("show")
+    ds.add_argument("doc_id", type=int)
+    ds.set_defaults(func=cmd_doc_show)
+
+    # ---- proposed JEs ----
+    prop = sub.add_parser("propose", help="review AI-proposed journal entries")
+    prsub = prop.add_subparsers(dest="prop_cmd", required=True)
+    prl = prsub.add_parser("list")
+    prl.add_argument("--limit", type=int, default=100)
+    prl.set_defaults(func=cmd_propose_list)
+    pra = prsub.add_parser("approve")
+    pra.add_argument("entry_id", type=int)
+    pra.set_defaults(func=cmd_propose_approve)
+    prr = prsub.add_parser("reject")
+    prr.add_argument("entry_id", type=int)
+    prr.set_defaults(func=cmd_propose_reject)
 
     tb = sub.add_parser("trial-balance")
     tb.add_argument("--as-of", help="YYYY-MM-DD")

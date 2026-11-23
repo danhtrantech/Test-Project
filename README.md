@@ -27,7 +27,10 @@ the core accounting workflow.
 | Customer receipts (`payment receive`) with multi-invoice allocation | done |
 | Vendor payments (`payment send`) with multi-bill allocation | done |
 | Standalone expenses (no bill, direct DR expense / CR cash) | done |
-| Document ingestion + Claude extraction | next slice |
+| Document ingestion (store + text extract for pdf/csv/txt; vision deferred) | done |
+| Claude-powered field extraction with heuristic fallback | done |
+| Propose bill / invoice / proposed JE from extracted data | done |
+| Approve / reject proposed journal entries | done |
 | Profit & Loss, Balance Sheet, General Ledger | next slice |
 | Conversational agent (Claude tool-use loop) | next slice |
 | Payroll / inventory | later slices |
@@ -75,6 +78,49 @@ python -m qbai.cli expense add --account 6300 --amount 38.50 --vendor "Some Rest
 # Reports
 python -m qbai.cli trial-balance
 ```
+
+## Document ingestion (the AI piece)
+
+Drop a receipt, bill, or customer invoice as a PDF, CSV, or plain-text file.
+Claude reads it, proposes an accounting entry, and the entry sits in a
+`proposed` (for JEs) or `draft` (for bills/invoices) state until you approve it.
+
+```bash
+# One-shot: store the file, extract fields, propose an entry
+python -m qbai.cli doc ingest /path/to/receipt.pdf --extract --propose
+
+# Or step by step
+python -m qbai.cli doc ingest /path/to/bill.pdf
+python -m qbai.cli doc extract 1                 # run Claude extraction
+python -m qbai.cli doc propose 1                 # stage proposed entry
+python -m qbai.cli doc show 1                    # inspect extracted fields
+
+# Review the queue
+python -m qbai.cli doc list
+python -m qbai.cli propose list
+
+# Approve a proposed JE (becomes posted)
+python -m qbai.cli propose approve 1
+# Or reject (deletes the proposed JE)
+python -m qbai.cli propose reject 1
+
+# For proposed bills/invoices, review and finalize instead:
+python -m qbai.cli bill show 1
+python -m qbai.cli bill finalize 1 --tax 2.96 --tax-account 6999
+```
+
+### Extraction modes
+
+- **Claude** (default): uses the Anthropic API. Needs `ANTHROPIC_API_KEY` and
+  the `anthropic` SDK installed. Override the model with
+  `QBAI_CLAUDE_MODEL=claude-sonnet-5-5`.
+- **Heuristic** (`--heuristic` flag): no network; uses regex-based extraction.
+  Deterministic; good for tests and demos, and the automatic fallback when
+  Claude isn't configured.
+
+PDF support needs `pypdf` (`pip install pypdf`). Images (PNG / JPG) are stored
+but local OCR isn't included — Claude Vision support for images is a later
+slice.
 
 The DB lives at `data/qbai.db` by default; pass `--db /some/other.db`
 to override.

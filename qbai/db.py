@@ -168,6 +168,30 @@ CREATE TABLE IF NOT EXISTS payment_allocations (
     amount_cents  INTEGER NOT NULL,
     CHECK((invoice_id IS NULL) <> (bill_id IS NULL))
 );
+
+CREATE TABLE IF NOT EXISTS documents (
+    id                 INTEGER PRIMARY KEY,
+    original_name      TEXT NOT NULL,
+    stored_path        TEXT NOT NULL,
+    sha256             TEXT NOT NULL,
+    mime_type          TEXT,
+    size_bytes         INTEGER,
+    doc_type           TEXT,
+    extracted_text     TEXT,
+    extracted_data     TEXT,
+    extraction_status  TEXT NOT NULL DEFAULT 'pending'
+                         CHECK(extraction_status IN ('pending','extracted','failed')),
+    extraction_error   TEXT,
+    extractor          TEXT,
+    proposed_je_id     INTEGER REFERENCES journal_entries(id),
+    proposed_bill_id   INTEGER REFERENCES bills(id),
+    proposed_invoice_id INTEGER REFERENCES invoices(id),
+    uploaded_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    uploaded_by        TEXT NOT NULL DEFAULT 'system'
+);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(extraction_status);
+CREATE INDEX IF NOT EXISTS idx_documents_sha    ON documents(sha256);
+CREATE INDEX IF NOT EXISTS idx_je_source        ON journal_entries(source_type, source_id);
 """
 
 
