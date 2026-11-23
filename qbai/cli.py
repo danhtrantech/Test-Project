@@ -9,7 +9,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import ap, ar, documents, expenses, extract, ingest, payments
+from . import agent as agent_mod
+from . import ap, ar, bank, documents, expenses, extract, ingest, payments
 from .coa import add_account, list_accounts, seed_chart_of_accounts
 from .db import get_connection, init_db
 from .ledger import (
@@ -422,16 +423,26 @@ def cmd_doc_extract(args) -> int:
     if doc is None:
         print(f"No document #{args.doc_id}", file=sys.stderr)
         return 1
-    if doc.extracted_text is None:
-        print(f"Document #{doc.id} has no extracted text ({doc.extraction_error}); "
-              "cannot run text extraction.", file=sys.stderr)
-        return 1
     coa = [{"code": a.code, "name": a.name, "type": a.type}
            for a in list_accounts(conn)]
-    result = extract.extract(
-        doc.extracted_text, chart_of_accounts=coa,
-        doc_type_hint=doc.doc_type, force_heuristic=args.heuristic,
-    )
+    is_image = (doc.mime_type or "").startswith("image/")
+    if is_image and not args.heuristic:
+        try:
+            result = extract.extract_image_with_claude(
+                doc.stored_path, chart_of_accounts=coa, doc_type_hint=doc.doc_type,
+            )
+        except RuntimeError as e:
+            print(f"Image extraction needs Claude Vision: {e}", file=sys.stderr)
+            return 1
+    else:
+        if doc.extracted_text is None:
+            print(f"Document #{doc.id} has no extracted text ({doc.extraction_error}); "
+                  "cannot run text extraction.", file=sys.stderr)
+            return 1
+        result = extract.extract(
+            doc.extracted_text, chart_of_accounts=coa,
+            doc_type_hint=doc.doc_type, force_heuristic=args.heuristic,
+        )
     documents.set_extracted_data(
         conn, doc.id, result.data, extractor=result.extractor,
         doc_type=result.data.get("doc_type"),
@@ -565,6 +576,61 @@ def _fake(args, **overrides):
     import types
     merged = {**vars(args), **overrides}
     return types.SimpleNamespace(**merged)
+
+
+def cmd_bank_ingest(args) -> int:
+    conn = _conn(args)
+    res = bank.ingest_bank_csv(
+        conn, args.path,
+        cash_account_code=args.cash_account or "1010",
+        db_path=args.db, actor=args.user or "cli",
+    )
+    print(f"Ingested bank CSV as document #{res.doc_id}: "
+          f"{res.rows_parsed} rows parsed, "
+          f"{len(res.proposed_je_ids)} proposed JEs, "
+          f"{len(res.skipped)} skipped")
+    if res.skipped:
+        for i, why in res.skipped:
+            print(f"  row {i} skipped: {why}")
+    print("Review with `qbai propose list` and approve/reject each.")
+    return 0
+
+
+# ---- Conversational agent -------------------------------------------------
+
+def cmd_chat(args) -> int:
+    conn = _conn(args)
+    history: list[dict] = []
+    if args.message is not None:
+        return _run_chat_turn(conn, args.message, history, actor=args.user or "agent")
+    # Interactive REPL
+    print("qbai chat — type your questions or commands. Ctrl-D to exit.")
+    while True:
+        try:
+            user = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not user:
+            continue
+        rc = _run_chat_turn(conn, user, history, actor=args.user or "agent")
+        if rc != 0:
+            return rc
+
+
+def _run_chat_turn(conn, user_message, history, actor) -> int:
+    try:
+        result = agent_mod.chat_once(conn, user_message, history=history, actor=actor)
+    except RuntimeError as e:
+        print(f"agent unavailable: {e}", file=sys.stderr)
+        print("Set ANTHROPIC_API_KEY and `pip install anthropic` to enable the agent.",
+              file=sys.stderr)
+        return 1
+    history[:] = result["messages"]
+    text = result["text"].strip()
+    if text:
+        print(text)
+    return 0
 
 
 def cmd_trial_balance(args) -> int:
@@ -914,6 +980,20 @@ def build_parser() -> argparse.ArgumentParser:
     gl.add_argument("--from", dest="date_from", help="YYYY-MM-DD")
     gl.add_argument("--to", dest="date_to", help="YYYY-MM-DD")
     gl.set_defaults(func=cmd_gl)
+
+    # ---- bank CSV ingest ----
+    bk = sub.add_parser("bank", help="bank statement CSV ingestion")
+    bksub = bk.add_subparsers(dest="bank_cmd", required=True)
+    bki = bksub.add_parser("ingest")
+    bki.add_argument("path", help="path to a bank statement CSV")
+    bki.add_argument("--cash-account", help="default 1010 Checking")
+    bki.set_defaults(func=cmd_bank_ingest)
+
+    # ---- conversational agent ----
+    ch = sub.add_parser("chat", help="talk to qbai (Claude agent)")
+    ch.add_argument("message", nargs="?",
+                    help="one-shot message; omit for interactive REPL")
+    ch.set_defaults(func=cmd_chat)
 
     return p
 

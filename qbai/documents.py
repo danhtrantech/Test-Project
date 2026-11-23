@@ -90,7 +90,14 @@ def ingest_file(
     mime, _ = mimetypes.guess_type(src.name)
 
     text, error = extract_text(dest, mime)
-    status = "extracted" if text is not None else "failed"
+    is_image = (mime and mime.startswith("image/")) or dest.suffix.lower() in \
+        (".png", ".jpg", ".jpeg")
+    if text is not None:
+        status = "extracted"
+    elif error is None and is_image:
+        status = "pending"   # Claude Vision will finish extraction
+    else:
+        status = "failed"
 
     with conn:
         cur = conn.execute(
@@ -106,7 +113,11 @@ def ingest_file(
 
 
 def extract_text(path: Path, mime: str | None) -> tuple[str | None, str | None]:
-    """Return (text, error). text is None iff extraction failed."""
+    """Return (text, error). text is None iff extraction failed.
+
+    For images, returns (None, None) — the row is left pending and the Claude
+    Vision extractor in qbai.extract.extract_image_with_claude will fill it.
+    """
     name = path.name.lower()
     try:
         if name.endswith((".txt", ".csv", ".md")) or (mime and mime.startswith("text/")):
@@ -114,8 +125,7 @@ def extract_text(path: Path, mime: str | None) -> tuple[str | None, str | None]:
         if name.endswith(".pdf") or mime == "application/pdf":
             return _extract_pdf(path)
         if name.endswith((".png", ".jpg", ".jpeg")) or (mime and mime.startswith("image/")):
-            # No local OCR; Claude Vision handles this later. Stash a marker.
-            return None, "image: requires vision extractor (qbai.extract)"
+            return None, None   # pending; Claude Vision will handle it
         return None, f"unsupported file type: {mime or name}"
     except Exception as e:
         return None, f"{type(e).__name__}: {e}"

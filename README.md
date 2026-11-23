@@ -34,8 +34,12 @@ the core accounting workflow.
 | Profit & Loss (period-filtered) | done |
 | Balance Sheet (Assets = Liabilities + Equity, with current-period NI) | done |
 | General Ledger (per-account register with running balance) | done |
-| Conversational agent (Claude tool-use loop) | next slice |
-| Payroll / inventory | later slices |
+| Conversational agent (Claude tool-use loop over all business APIs) | done |
+| Claude Vision for image receipts (PNG / JPG) | done |
+| Bank-statement CSV ingestion (one proposed JE per row) | done |
+| Payroll (tax tables, 941/W-2) | separate session |
+| Inventory (FIFO/LIFO costing, reorder points) | separate session |
+| Web UI | separate session |
 
 ## Try it
 
@@ -83,6 +87,47 @@ python -m qbai.cli pnl --from 2026-01-01 --to 2026-12-31
 python -m qbai.cli balance-sheet --as-of 2026-12-31
 python -m qbai.cli gl --account 1010 --from 2026-01-01 --to 2026-12-31
 ```
+
+## Bank statements
+
+Drop a bank-statement CSV and get one proposed journal entry per transaction;
+each entry is heuristically coded (Meals / Office Supplies / SaaS / A/R / etc.)
+and you approve or re-classify before it posts.
+
+```bash
+python -m qbai.cli bank ingest statement.csv
+python -m qbai.cli propose list
+python -m qbai.cli propose approve 1   # or reject
+```
+
+CSV columns can be `date,description,amount` (signed) or
+`date,description,debit,credit` — column names are matched case-insensitively
+from a list of common aliases (`Posted Date`, `Payee`, `Withdrawal`, etc.).
+
+## The conversational agent
+
+```bash
+# One-shot
+python -m qbai.cli chat "create an invoice for Acme Corp for 20 hours of consulting at $150/hr"
+python -m qbai.cli chat "what's open A/P?"
+python -m qbai.cli chat "run a P&L for Q1 2026"
+
+# Interactive REPL
+python -m qbai.cli chat
+> show me the balance sheet
+> ingest /path/to/receipt.pdf and propose the entry
+> approve the proposed JE for the Starbucks receipt
+```
+
+The agent calls the same business APIs the CLI does, so everything it does
+hits the audit log and goes through the same balancing checks. Writes that
+are hard to undo (finalize, void, record payment, approve proposed JE) prompt
+the agent to confirm first. Needs `ANTHROPIC_API_KEY` and
+`pip install anthropic`; falls back to a clear error message when either is
+missing.
+
+Image receipts (PNG / JPG) are supported via Claude Vision; `doc extract`
+automatically uses it for images.
 
 ## Document ingestion (the AI piece)
 

@@ -184,7 +184,7 @@ class TestIngestAndPropose(unittest.TestCase):
             self.assertEqual(d1.sha256, d2.sha256)
             self.assertEqual(d1.stored_path, d2.stored_path)
 
-    def test_unsupported_file_type_is_stored_but_marked_failed(self):
+    def test_image_is_stored_as_pending_for_vision_extraction(self):
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
             conn, db_path = fresh_db(tmp)
@@ -192,8 +192,20 @@ class TestIngestAndPropose(unittest.TestCase):
             img.write_bytes(b"\x89PNG\r\n\x1a\nfake")
             doc_id = documents.ingest_file(conn, img, db_path=db_path)
             doc = documents.get_document(conn, doc_id)
+            # Images are left pending; Claude Vision handles them in a later step.
+            self.assertEqual(doc.extraction_status, "pending")
+            self.assertEqual(doc.mime_type, "image/png")
+
+    def test_truly_unsupported_file_type_is_marked_failed(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            conn, db_path = fresh_db(tmp)
+            weird = tmp / "thing.xyz"
+            weird.write_bytes(b"gibberish")
+            doc_id = documents.ingest_file(conn, weird, db_path=db_path)
+            doc = documents.get_document(conn, doc_id)
             self.assertEqual(doc.extraction_status, "failed")
-            self.assertIn("vision", (doc.extraction_error or "").lower())
+            self.assertIn("unsupported", (doc.extraction_error or "").lower())
 
     def test_reject_proposed_removes_entry(self):
         with tempfile.TemporaryDirectory() as t:

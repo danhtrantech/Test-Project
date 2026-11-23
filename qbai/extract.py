@@ -13,12 +13,15 @@ feeds this into qbai.ingest to propose a bill / invoice / JE.
 
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 
 EXTRACTION_SCHEMA = {
@@ -277,7 +280,60 @@ def extract_with_heuristics(
     return ExtractionResult(data=data, extractor="heuristic")
 
 
-# ---------- Public entry point ---------------------------------------------
+def extract_image_with_claude(
+    image_path: str | Path, *, chart_of_accounts: list[dict],
+    doc_type_hint: str | None = None, model: str | None = None,
+) -> ExtractionResult:
+    """Send a receipt/invoice image to Claude Vision. Supports PNG / JPG."""
+    try:
+        import anthropic  # type: ignore
+    except ImportError as e:
+        raise RuntimeError("anthropic SDK not installed (pip install anthropic)") from e
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+
+    path = Path(image_path)
+    mime, _ = mimetypes.guess_type(path.name)
+    if not mime or not mime.startswith("image/"):
+        raise ValueError(f"Not an image: {path.name} (mime={mime})")
+
+    data_b64 = base64.standard_b64encode(path.read_bytes()).decode("ascii")
+    model = model or os.environ.get("QBAI_CLAUDE_MODEL", "claude-sonnet-5-5")
+    client = anthropic.Anthropic()
+
+    coa_text = "\n".join(f"  {a['code']}  {a['type']:<10} {a['name']}"
+                         for a in chart_of_accounts)
+    system = (
+        "You are a bookkeeping assistant. Read the image of a receipt / bill / "
+        "invoice the user provides and extract structured data. Pick a "
+        "suggested_account_code from the chart of accounts below that best fits "
+        "each line item.\n\n"
+        f"Chart of accounts:\n{coa_text}\n\n"
+        "Return ONLY a single JSON object with this shape (no prose, no markdown):\n"
+        f"{json.dumps(EXTRACTION_SCHEMA, indent=2)}\n\n"
+        "All money fields are INTEGER CENTS."
+    )
+    resp = client.messages.create(
+        model=model, max_tokens=2048,
+        system=[{"type": "text", "text": system,
+                 "cache_control": {"type": "ephemeral"}}],
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image",
+                 "source": {"type": "base64", "media_type": mime, "data": data_b64}},
+                {"type": "text",
+                 "text": f"Document type hint: {doc_type_hint or 'auto-detect'}.\n"
+                         "Extract the fields as JSON."},
+            ],
+        }],
+    )
+    raw = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
+    data = _parse_json_response(raw)
+    return ExtractionResult(data=data, extractor="claude-vision", model=model)
+
+
+
 
 def extract(
     text: str, *, chart_of_accounts: list[dict],
