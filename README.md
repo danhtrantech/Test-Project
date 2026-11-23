@@ -31,7 +31,9 @@ the core accounting workflow.
 | Claude-powered field extraction with heuristic fallback | done |
 | Propose bill / invoice / proposed JE from extracted data | done |
 | Approve / reject proposed journal entries | done |
-| Profit & Loss, Balance Sheet, General Ledger | next slice |
+| Profit & Loss (period-filtered) | done |
+| Balance Sheet (Assets = Liabilities + Equity, with current-period NI) | done |
+| General Ledger (per-account register with running balance) | done |
 | Conversational agent (Claude tool-use loop) | next slice |
 | Payroll / inventory | later slices |
 
@@ -77,6 +79,9 @@ python -m qbai.cli expense add --account 6300 --amount 38.50 --vendor "Some Rest
 
 # Reports
 python -m qbai.cli trial-balance
+python -m qbai.cli pnl --from 2026-01-01 --to 2026-12-31
+python -m qbai.cli balance-sheet --as-of 2026-12-31
+python -m qbai.cli gl --account 1010 --from 2026-01-01 --to 2026-12-31
 ```
 
 ## Document ingestion (the AI piece)

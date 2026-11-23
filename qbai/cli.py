@@ -17,7 +17,7 @@ from .ledger import (
 )
 from .money import format_money, to_cents
 from .parties import add_party, list_parties, require_party_by_name
-from .reports import trial_balance
+from .reports import balance_sheet, general_ledger, profit_and_loss, trial_balance
 
 
 def _conn(args) -> "sqlite3.Connection":  # type: ignore[name-defined]
@@ -589,6 +589,109 @@ def cmd_trial_balance(args) -> int:
     return 0
 
 
+# ---- P&L / Balance Sheet / General Ledger ---------------------------------
+
+def _section_title(text: str, width: int = 78) -> None:
+    print()
+    print(text.upper())
+
+
+def cmd_pnl(args) -> int:
+    conn = _conn(args)
+    pnl = profit_and_loss(conn, date_from=args.date_from, date_to=args.date_to)
+    period = ""
+    if args.date_from or args.date_to:
+        period = f" | {args.date_from or '(inception)'} to {args.date_to or '(today)'}"
+    print(f"Profit & Loss{period}")
+
+    _section_title("Income")
+    if not pnl.income:
+        print("  (no income)")
+    for r in pnl.income:
+        print(f"  {r.code:<6} {r.name[:42]:<42} {format_money(r.amount):>18}")
+    print("  " + "-" * 68)
+    print(f"  {'Total Income':<49} {format_money(pnl.total_income):>18}")
+
+    _section_title("Expenses")
+    if not pnl.expenses:
+        print("  (no expenses)")
+    for r in pnl.expenses:
+        print(f"  {r.code:<6} {r.name[:42]:<42} {format_money(r.amount):>18}")
+    print("  " + "-" * 68)
+    print(f"  {'Total Expenses':<49} {format_money(pnl.total_expenses):>18}")
+
+    print()
+    print(f"  {'NET INCOME':<49} {format_money(pnl.net_income):>18}")
+    return 0
+
+
+def cmd_balance_sheet(args) -> int:
+    conn = _conn(args)
+    bs = balance_sheet(conn, as_of=args.as_of)
+    print(f"Balance Sheet{f' as of {args.as_of}' if args.as_of else ''}")
+
+    _section_title("Assets")
+    for r in bs.assets.rows:
+        print(f"  {r.code:<6} {r.name[:42]:<42} {format_money(r.amount):>18}")
+    print("  " + "-" * 68)
+    print(f"  {'Total Assets':<49} {format_money(bs.assets.total):>18}")
+
+    _section_title("Liabilities")
+    for r in bs.liabilities.rows:
+        print(f"  {r.code:<6} {r.name[:42]:<42} {format_money(r.amount):>18}")
+    print("  " + "-" * 68)
+    print(f"  {'Total Liabilities':<49} {format_money(bs.liabilities.total):>18}")
+
+    _section_title("Equity")
+    for r in bs.equity.rows:
+        print(f"  {r.code:<6} {r.name[:42]:<42} {format_money(r.amount):>18}")
+    print(f"  {'':<6} {'Current Period Net Income':<42} "
+          f"{format_money(bs.net_income_to_date):>18}")
+    print("  " + "-" * 68)
+    print(f"  {'Total Equity':<49} {format_money(bs.equity.total):>18}")
+
+    print()
+    print(f"  {'Total Liabilities + Equity':<49} "
+          f"{format_money(bs.total_liabilities_and_equity):>18}")
+    diff = bs.assets.total - bs.total_liabilities_and_equity
+    if diff != 0:
+        print(f"!! Balance sheet out of balance by {format_money(diff)}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def cmd_gl(args) -> int:
+    conn = _conn(args)
+    accounts = general_ledger(
+        conn, account_code=args.account,
+        date_from=args.date_from, date_to=args.date_to,
+    )
+    if not accounts:
+        print("(no activity)")
+        return 0
+    period = ""
+    if args.date_from or args.date_to:
+        period = f"  |  {args.date_from or '(inception)'} to {args.date_to or '(today)'}"
+    for a in accounts:
+        print(f"\n{a.code}  {a.name}  [{a.type}]{period}")
+        print(f"  Opening balance                                       "
+              f"{format_money(a.opening_balance):>18}")
+        if not a.entries:
+            print("  (no activity in window)")
+        else:
+            print(f"  {'DATE':<12} {'JE':<5} {'DESCRIPTION':<30} "
+                  f"{'DEBIT':>12} {'CREDIT':>12} {'BALANCE':>14}")
+            for e in a.entries:
+                desc = (e.description or e.memo or "")[:30]
+                print(f"  {e.date:<12} {e.entry_id:<5} {desc:<30} "
+                      f"{format_money(e.debit):>12} "
+                      f"{format_money(e.credit):>12} "
+                      f"{format_money(e.balance):>14}")
+        print(f"  Closing balance                                       "
+              f"{format_money(a.closing_balance):>18}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="qbai", description="qbai bookkeeping CLI")
     p.add_argument("--db", help="path to SQLite DB (default: data/qbai.db)")
@@ -796,6 +899,21 @@ def build_parser() -> argparse.ArgumentParser:
     tb = sub.add_parser("trial-balance")
     tb.add_argument("--as-of", help="YYYY-MM-DD")
     tb.set_defaults(func=cmd_trial_balance)
+
+    pnl = sub.add_parser("pnl", help="profit & loss over a period")
+    pnl.add_argument("--from", dest="date_from", help="YYYY-MM-DD")
+    pnl.add_argument("--to", dest="date_to", help="YYYY-MM-DD")
+    pnl.set_defaults(func=cmd_pnl)
+
+    bs = sub.add_parser("balance-sheet", help="assets / liabilities / equity snapshot")
+    bs.add_argument("--as-of", help="YYYY-MM-DD")
+    bs.set_defaults(func=cmd_balance_sheet)
+
+    gl = sub.add_parser("gl", help="general ledger (transaction register per account)")
+    gl.add_argument("--account", help="limit to one account by code")
+    gl.add_argument("--from", dest="date_from", help="YYYY-MM-DD")
+    gl.add_argument("--to", dest="date_to", help="YYYY-MM-DD")
+    gl.set_defaults(func=cmd_gl)
 
     return p
 
